@@ -1,6 +1,3 @@
-# 📋 KS Booking System - README.md
-
-```markdown
 <div align="center">
   <h1>🏢 KS Booking System</h1>
   <p><strong>Сервис для бронирования мест сортировки (КС) на Wildberries с современным веб-интерфейсом и админ-панелью</strong></p>
