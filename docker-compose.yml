@@ -1,0 +1,87 @@
+services:
+  frontend:
+    build: ./frontend
+    container_name: frontend
+    restart: always
+    ports:
+      - "${FRONTEND_PORT}:${FRONTEND_PORT}" 
+    depends_on:
+      - backend
+    env_file:
+      - .env
+
+    volumes:
+      - ./frontend/index.html:/usr/share/nginx/html/index.html
+      - ./frontend/assets:/usr/share/nginx/html/assets
+      - ./frontend/css:/usr/share/nginx/html/css
+      - ./frontend/js:/usr/share/nginx/html/js
+
+  backend:
+    container_name: backend
+    build: ./backend
+    volumes:
+      - ./backend:/app
+    ports:
+      - "${BACKEND_PORT}:${BACKEND_PORT}"
+    env_file:
+      - .env
+    restart: always
+    depends_on:
+      cache:
+        condition: service_started
+      postgres_db:
+        condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
+
+  postgres_db:
+    image: postgres:17.4-alpine
+    container_name: postgres_db
+    command: postgres -c max_connections=300 -c shared_buffers=256MB
+    restart: always
+    environment:
+      DB_HOST: postgres_db
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+      POSTGRES_DB: ${DB_NAME}  
+    ports:
+      - "${DB_PORT}:${DB_PORT}"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s      
+      timeout: 5s     
+      retries: 5  
+      start_period: 10s 
+  
+  cache:
+    container_name: cache
+    image: redis:7.4-alpine
+    restart: always
+    command: >
+      sh -c "apk upgrade --no-cache && redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  migrations:
+    container_name: migrations
+    build: ./backend
+    command: alembic upgrade head
+    volumes:
+      - ./backend:/app
+    env_file:
+      - .env
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    restart: "no" 
+
+volumes:
+  postgres_data:
+  redis_data:

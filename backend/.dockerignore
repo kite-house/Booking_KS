@@ -1,0 +1,9 @@
+__pycache__/
+.pytest_cache/
+tests/
+pytest.ini
+
+Dockerfile
+Dockerfile.*
+.dockerignore
+docker-compose*.yml

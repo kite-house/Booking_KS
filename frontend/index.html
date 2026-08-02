@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KS Booking System</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Auth Section -->
+        <div id="auth-section" class="container">
+            <div class="auth-card">
+                <h1>KS Бронирование</h1>
+                <div class="auth-form">
+                    <input type="text" id="employeeId" placeholder="Введите Employee ID" class="input-field">
+                    <button id="loginBtn" class="btn-primary">Войти</button>
+                </div>
+                <div id="authMessage" class="message"></div>
+            </div>
+        </div>
+
+        <!-- Main Section -->
+        <div id="main-section" style="display: none;">
+            <header class="header">
+                <div class="header-content">
+                    <h1>KS Бронирование</h1>
+                    <div class="user-info">
+                        <span id="userName">Пользователь</span>
+                        <button id="logoutBtn" class="btn-secondary">Выйти</button>
+                    </div>
+                </div>
+            </header>
+
+            <div class="container">
+                <!-- Дата пикер - скролл лента -->
+                <div class="date-scroll">
+                    <button class="date-scroll-btn" id="scrollLeft">‹</button>
+                    <div class="date-scroll-container" id="dateScrollContainer">
+                        <!-- Даты будут генерироваться JS -->
+                    </div>
+                    <button class="date-scroll-btn" id="scrollRight">›</button>
+                </div>
+
+                <div class="booking-info">
+                    <div class="info-card">
+                        <h3>Информация</h3>
+                        <p id="selectedDateDisplay">Выберите дату для бронирования</p>
+                        <p>Бронирование доступно на неделю вперед</p>
+                        <p>Вы можете забронировать только одно место в день</p>
+                    </div>
+                    <div class="legend">
+                        <span class="legend-item">
+                            <span class="legend-color free"></span> Свободно
+                        </span>
+                        <span class="legend-item">
+                            <span class="legend-color booked"></span> Занято
+                        </span>
+                        <span class="legend-item">
+                            <span class="legend-color your-booking"></span> Ваше бронирование
+                        </span>
+                    </div>
+                </div>
+
+                <div class="places-grid" id="placesGrid">
+                    <!-- Places will be rendered here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Admin Section -->
+        <div id="admin-section" style="display: none;">
+            <header class="header">
+                <div class="header-content">
+                    <h1>Админ панель</h1>
+                    <div class="user-info">
+                        <span>Администратор</span>
+                        <button id="adminLogoutBtn" class="btn-secondary">Выйти</button>
+                    </div>
+                </div>
+            </header>
+
+            <div class="container">
+                <div class="admin-tabs">
+                    <button class="tab-btn active" data-tab="pending">Выдача доступа</button>
+                    <button class="tab-btn" data-tab="bookings">Бронирования</button>
+                    <button class="tab-btn" data-tab="history">История</button>
+                </div>
+
+                <div class="admin-content">
+                    <!-- Вкладка выдачи доступа -->
+                    <div id="pending-tab" class="tab-content active">
+                        <h2>Запросы на доступ</h2>
+                        <div id="pendingUsers"></div>
+                    </div>
+                    
+                    <!-- Вкладка бронирований -->
+                    <div id="bookings-tab" class="tab-content">
+                        <h2>Бронирования КС</h2>
+                        <!-- Дата скролл для админа -->
+                        <div class="date-scroll">
+                            <button class="date-scroll-btn" id="adminScrollLeft">‹</button>
+                            <div class="date-scroll-container" id="adminDateScrollContainer">
+                                <!-- Даты будут генерироваться JS -->
+                            </div>
+                            <button class="date-scroll-btn" id="adminScrollRight">›</button>
+                        </div>
+                        <div class="booking-info">
+                            <div class="info-card">
+                                <h3>📊 Статистика</h3>
+                                <p id="adminStats">Загрузка...</p>
+                            </div>
+                            <div class="legend">
+                                <span class="legend-item">
+                                    <span class="legend-color free"></span> Свободно
+                                </span>
+                                <span class="legend-item">
+                                    <span class="legend-color booked"></span> Занято
+                                </span>
+                            </div>
+                        </div>
+                        <div class="places-grid" id="adminPlacesGrid">
+                            <!-- Места для админа -->
+                        </div>
+                    </div>
+                    
+                    <!-- Вкладка истории -->
+                    <div id="history-tab" class="tab-content">
+                        <h2>История бронирований</h2>
+                        <div id="historyBookings"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Booking Modal -->
+    <div id="bookingModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Подтверждение бронирования</h2>
+            <div class="booking-form">
+                <p>Вы уверены, что хотите забронировать:</p>
+                <p id="placeInfo" style="font-size: 20px; font-weight: 600; color: #7b2ffc;"></p>
+                <p id="dateInfo" style="color: #909090;"></p>
+                <div style="display: flex; gap: 12px; margin-top: 16px;">
+                    <button id="confirmBookingBtn" class="btn-primary" style="flex: 1;">Забронировать</button>
+                    <button id="cancelBookingBtn" class="btn-secondary" style="flex: 1;">Отмена</button>
+                </div>
+                <div id="bookingNotification"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/auth.js"></script>
+    <script src="/js/app.js"></script>
+    <script src="/js/admin.js"></script>
+</body>
+</html>
