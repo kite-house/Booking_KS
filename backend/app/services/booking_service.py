@@ -92,7 +92,7 @@ class BookingService:
         
         now = datetime.now(timezone.utc)
         today = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        week_later = today + timedelta(days=7)
+        week_later = today + timedelta(days=8)
         
         if booking_date < today or booking_date >= week_later:
             raise ValueError("Бронирование доступно только на неделю вперед")
