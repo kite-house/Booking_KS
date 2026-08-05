@@ -18,7 +18,7 @@ class AuthService:
         user = User(
             employee_id=employee_id,
             has_access=False,
-            role="user"  # Простая строка
+            role="user"
         )
         self.db.add(user)
         await self.db.commit()
