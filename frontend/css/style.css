@@ -755,3 +755,52 @@ body {
     color: #ffc107;
     border: 2px solid rgba(255, 193, 7, 0.3);
 }
+
+/* frontend/css/style.css - добавить */
+
+.history-item {
+    padding: 14px 18px;
+    background: #1a1a1a;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    border-left: 4px solid #00c853;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    transition: all 0.3s;
+}
+
+.history-item:hover {
+    background: #222;
+    transform: translateX(4px);
+}
+
+.history-item .status-badge {
+    padding: 4px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.history-item .status-badge.created {
+    color: #00c853;
+    background: rgba(0, 200, 83, 0.15);
+}
+
+.history-item .status-badge.cancelled-user {
+    color: #ff1744;
+    background: rgba(255, 23, 68, 0.15);
+}
+
+.history-item .status-badge.cancelled-admin {
+    color: #ff6d00;
+    background: rgba(255, 109, 0, 0.15);
+}
+
+.history-item .status-badge.archived {
+    color: #78909c;
+    background: rgba(120, 144, 156, 0.15);
+}

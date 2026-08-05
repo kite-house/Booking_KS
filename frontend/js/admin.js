@@ -196,29 +196,38 @@ function adminUpdateStats(places) {
 
 function adminCancelBooking(bookingId, placeNumber) {
     if (!bookingId) {
-        alert('❌ Ошибка: ID бронирования не найден');
+        alert('Ошибка: ID бронирования не найден');
         return;
     }
     
-    if (!confirm(`❓ Вы уверены, что хотите отменить бронирование места ${placeNumber}?`)) {
+    const adminId = auth.getUserId();
+    if (!adminId) {
+        alert('Ошибка: не удалось определить администратора');
         return;
     }
     
-    fetch(`${API_BASE}/admin/cancel-booking/${bookingId}`, {
+    if (!confirm(`Вы уверены, что хотите отменить бронирование места ${placeNumber}?`)) {
+        return;
+    }
+    
+    fetch(`${API_BASE}/admin/cancel-booking/${bookingId}?admin_id=${adminId}`, {
         method: 'DELETE'
     })
     .then(response => {
         if (response.ok) {
-            alert(`✅ Бронирование места ${placeNumber} отменено!`);
-            adminLoadPlaces(); // Обновляем список
-            loadAdminBookings(); // Обновляем историю
+            alert(`Бронирование места ${placeNumber} отменено!`);
+            adminLoadPlaces();
+            loadAdminBookings();
+            loadHistory();
         } else {
-            alert('❌ Ошибка отмены бронирования');
+            response.json().then(data => {
+                alert('Ошибка: ' + (data.detail || 'Неизвестная ошибка'));
+            });
         }
     })
     .catch(error => {
         console.error('Error canceling booking:', error);
-        alert('❌ Ошибка соединения с сервером');
+        alert('Ошибка соединения с сервером');
     });
 }
 
@@ -422,41 +431,69 @@ function loadHistory() {
             if (bookings.length === 0) {
                 container.innerHTML = `
                     <div style="text-align: center; padding: 40px; color: #909090;">
-                        <p style="font-size: 18px;">📜 История пуста</p>
+                        <p style="font-size: 18px;">📭 История пуста</p>
+                        <p style="font-size: 14px; margin-top: 8px;">Здесь будут отображаться все действия с бронированиями</p>
                     </div>
                 `;
                 return;
             }
             
-            container.innerHTML = bookings.map(booking => `
-                <div style="
-                    padding: 16px 20px;
-                    background: #1a1a1a;
-                    border-radius: 8px;
-                    margin-bottom: 8px;
-                    border-left: 4px solid #00c853;
-                ">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <strong>📍 Место ${booking.place_number}</strong>
-                            <span style="margin-left: 12px; color: #909090;">
-                                Блок ${booking.block}
-                            </span>
-                            <span style="margin-left: 12px; color: #909090;">
-                                👤 Пользователь: <strong>${booking.employee_id || booking.user_id}</strong>
-                            </span>
-                            <span style="margin-left: 12px; color: #909090;">
-                                📅 ${new Date(booking.booking_date).toLocaleString()}
-                            </span>
-                            <span style="margin-left: 12px; color: #7b2ffc; font-size: 12px;">
-                                🕐 Создано: ${new Date(booking.created_at).toLocaleString()}
-                            </span>
+            container.innerHTML = bookings.map(booking => {
+                const dateStr = new Date(booking.booking_date).toLocaleDateString('ru-RU', {
+                    day: '2-digit', month: '2-digit', year: 'numeric'
+                });
+                const timeStr = new Date(booking.booking_date).toLocaleTimeString('ru-RU', {
+                    hour: '2-digit', minute: '2-digit'
+                });
+                
+                const createdDate = new Date(booking.created_at).toLocaleString('ru-RU', {
+                    day: '2-digit', month: '2-digit', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit'
+                });
+                
+                return `
+                    <div style="
+                        padding: 14px 18px;
+                        background: #1a1a1a;
+                        border-radius: 8px;
+                        margin-bottom: 8px;
+                        border-left: 4px solid ${booking.action_color || '#00c853'};
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        flex-wrap: wrap;
+                        gap: 8px;
+                        transition: all 0.3s;
+                    ">
+                        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                            <strong style="color: #e0e0e0; font-size: 15px;">📍 ${booking.place_number}</strong>
+                            <span style="color: #909090; font-size: 13px;">Блок ${booking.block}</span>
+                            <span style="color: #909090; font-size: 13px;">👤 ${booking.employee_id}</span>
+                            <span style="color: #909090; font-size: 13px;">📅 ${dateStr} ${timeStr}</span>
+                            <span style="color: #666; font-size: 11px;">🕐 ${createdDate}</span>
                         </div>
+                        <span style="
+                            color: ${booking.action_color || '#00c853'};
+                            background: ${booking.action_bg || 'rgba(0, 200, 83, 0.15)'};
+                            padding: 4px 14px;
+                            border-radius: 20px;
+                            font-size: 12px;
+                            font-weight: 500;
+                            white-space: nowrap;
+                        ">${booking.action || 'Создано'}</span>
                     </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         } catch (error) {
             console.error('Error loading history:', error);
+            const container = document.getElementById('historyBookings');
+            if (container) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: #ff1744;">
+                        ❌ Ошибка загрузки истории
+                    </div>
+                `;
+            }
         }
         historyTimeout = null;
     }, 500);

@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, or_
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from app.models.booking import Booking
@@ -33,11 +33,13 @@ class BookingService:
         start_date = date
         end_date = date + timedelta(days=1)
         
+        # Получаем только активные бронирования
         bookings_result = await self.db.execute(
             select(Booking).where(
                 and_(
                     Booking.booking_date >= start_date,
-                    Booking.booking_date < end_date
+                    Booking.booking_date < end_date,
+                    Booking.status == "active"
                 )
             )
         )
@@ -52,7 +54,8 @@ class BookingService:
                     and_(
                         Booking.user_id == user_id,
                         Booking.booking_date >= start_date,
-                        Booking.booking_date < end_date
+                        Booking.booking_date < end_date,
+                        Booking.status == "active"
                     )
                 )
             )
@@ -69,10 +72,11 @@ class BookingService:
                 "block": place.block.value if hasattr(place.block, 'value') else place.block,
                 "is_booked": is_booked,
                 "booked_by": booking.user_id if booking else None,
-                "booking_id": booking.id if booking else None,  # <-- ДОБАВЛЯЕМ booking_id
+                "booking_id": booking.id if booking else None,
                 "booking_date": booking.booking_date if booking else None,
                 "user_has_booking": user_has_booking,
-                "selected_date": date.isoformat() if date else None
+                "selected_date": date.isoformat() if date else None,
+                "can_cancel": booking and booking.user_id == user_id and booking.booking_date > today
             })
         
         return result
@@ -92,7 +96,7 @@ class BookingService:
         
         now = datetime.now(timezone.utc)
         today = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        week_later = today + timedelta(days=8)
+        week_later = today + timedelta(days=7)
         
         if booking_date < today or booking_date >= week_later:
             raise ValueError("Бронирование доступно только на неделю вперед")
@@ -100,12 +104,14 @@ class BookingService:
         start_date = booking_date
         end_date = booking_date + timedelta(days=1)
         
+        # Проверяем только активные бронирования
         existing_booking = await self.db.execute(
             select(Booking).where(
                 and_(
                     Booking.place_id == booking_data.place_id,
                     Booking.booking_date >= start_date,
-                    Booking.booking_date < end_date
+                    Booking.booking_date < end_date,
+                    Booking.status == "active"
                 )
             )
         )
@@ -117,7 +123,8 @@ class BookingService:
                 and_(
                     Booking.user_id == user_id,
                     Booking.booking_date >= start_date,
-                    Booking.booking_date < end_date
+                    Booking.booking_date < end_date,
+                    Booking.status == "active"
                 )
             )
         )
@@ -127,13 +134,160 @@ class BookingService:
         booking = Booking(
             user_id=user_id,
             place_id=booking_data.place_id,
-            booking_date=booking_date
+            booking_date=booking_date,
+            status="active"
         )
         
         self.db.add(booking)
         await self.db.commit()
         await self.db.refresh(booking)
         return booking
+    
+    async def cancel_booking_by_user(self, booking_id: int, user_id: int) -> dict:
+        """Отмена бронирования пользователем"""
+        result = await self.db.execute(
+            select(Booking).where(
+                and_(
+                    Booking.id == booking_id,
+                    Booking.user_id == user_id,
+                    Booking.status == "active"
+                )
+            )
+        )
+        booking = result.scalar_one_or_none()
+        if not booking:
+            return {"success": False, "message": "Бронирование не найдено"}
+        
+        now = datetime.now(timezone.utc)
+        today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        # Нельзя отменить бронирование на сегодня
+        if booking.booking_date == today:
+            return {"success": False, "message": "Нельзя отменить бронирование на сегодня"}
+        
+        booking.status = "cancelled_by_user"
+        booking.cancelled_at = now
+        await self.db.commit()
+        
+        return {
+            "success": True, 
+            "message": "Бронирование отменено",
+            "booking": booking
+        }
+    
+    async def cancel_booking_by_user(self, booking_id: int, user_id: int) -> dict:
+        """Отмена бронирования пользователем"""
+        result = await self.db.execute(
+            select(Booking).where(
+                and_(
+                    Booking.id == booking_id,
+                    Booking.user_id == user_id,
+                    Booking.status == "active"
+                )
+            )
+        )
+        booking = result.scalar_one_or_none()
+        if not booking:
+            return {"success": False, "message": "Бронирование не найдено"}
+        
+        now = datetime.now(timezone.utc)
+        today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        # Нельзя отменить бронирование на сегодня
+        if booking.booking_date == today:
+            return {"success": False, "message": "Нельзя отменить бронирование на сегодня"}
+        
+        # Нельзя отменить прошедшее бронирование
+        if booking.booking_date < today:
+            return {"success": False, "message": "Нельзя отменить прошедшее бронирование"}
+        
+        booking.status = "cancelled_by_user"
+        booking.cancelled_at = now
+        await self.db.commit()
+        
+        return {
+            "success": True, 
+            "message": "Бронирование отменено",
+            "booking": booking
+        }
+    
+    async def get_all_bookings_with_history(self) -> List[dict]:
+        """Получение полной истории всех бронирований с действиями"""
+        # Сначала архивируем прошедшие
+        await self.archive_past_bookings()
+        
+        # Получаем все бронирования с данными о пользователях
+        result = await self.db.execute(
+            select(Booking, KSPlace, User)
+            .join(KSPlace, Booking.place_id == KSPlace.id)
+            .join(User, Booking.user_id == User.id)
+            .order_by(Booking.created_at.desc())  # Сортируем по дате создания
+        )
+        rows = result.all()
+        
+        bookings_list = []
+        for booking, place, user in rows:
+            # Формируем запись с действием
+            action = "Создано"
+            action_color = "#00c853"
+            action_bg = "rgba(0, 200, 83, 0.15)"
+            
+            if booking.status == "cancelled_by_user":
+                action = "Отменено пользователем"
+                action_color = "#ff1744"
+                action_bg = "rgba(255, 23, 68, 0.15)"
+            elif booking.status == "cancelled_by_admin":
+                action = "Отменено администратором"
+                action_color = "#ff6d00"
+                action_bg = "rgba(255, 109, 0, 0.15)"
+            elif booking.status == "archived":
+                action = "Выполнено"
+                action_color = "#78909c"
+                action_bg = "rgba(120, 144, 156, 0.15)"
+            
+            booking_dict = {
+                "id": booking.id,
+                "user_id": booking.user_id,
+                "employee_id": user.employee_id,
+                "place_id": booking.place_id,
+                "place_number": place.place_number,
+                "block": place.block.value if hasattr(place.block, 'value') else place.block,
+                "booking_date": booking.booking_date,
+                "created_at": booking.created_at,
+                "status": booking.status,
+                "cancelled_at": booking.cancelled_at,
+                "action": action,
+                "action_color": action_color,
+                "action_bg": action_bg
+            }
+            
+            # Если отменено - добавляем информацию о том, кто отменил
+            if booking.cancelled_by:
+                canceller_result = await self.db.execute(
+                    select(User.employee_id).where(User.id == booking.cancelled_by)
+                )
+                canceller_employee_id = canceller_result.scalar_one_or_none()
+                booking_dict["cancelled_by"] = booking.cancelled_by
+                booking_dict["canceller_employee_id"] = canceller_employee_id
+                booking_dict["action"] = f"Отменено администратором ({canceller_employee_id})"
+            
+            bookings_list.append(booking_dict)
+        
+        return bookings_list
+    
+    async def get_user_active_bookings(self, user_id: int) -> List[Booking]:
+        """Получение активных бронирований пользователя"""
+        result = await self.db.execute(
+            select(Booking)
+            .where(
+                and_(
+                    Booking.user_id == user_id,
+                    Booking.status == "active"
+                )
+            )
+            .order_by(Booking.booking_date.asc())
+        )
+        return result.scalars().all()
     
     async def get_user_bookings(self, user_id: int) -> List[Booking]:
         result = await self.db.execute(
@@ -142,42 +296,64 @@ class BookingService:
             .order_by(Booking.booking_date.desc())
         )
         return result.scalars().all()
-    
-    async def get_all_bookings(self) -> List[dict]:
+
+    async def archive_past_bookings(self) -> int:
+        now = datetime.now(timezone.utc)
+        today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        
         result = await self.db.execute(
-            select(Booking, KSPlace, User)
-            .join(KSPlace, Booking.place_id == KSPlace.id)
-            .join(User, Booking.user_id == User.id)
-            .order_by(Booking.booking_date.desc())
+            select(Booking).where(
+                and_(
+                    Booking.booking_date < today,
+                    Booking.status == "active"
+                )
+            )
         )
-        rows = result.all()
-        return [
-            {
-                "id": booking.id,
-                "user_id": booking.user_id,
-                "employee_id": user.employee_id,
-                "place_id": booking.place_id,
-                "place_number": place.place_number,
-                "block": place.block.value if hasattr(place.block, 'value') else place.block,
-                "booking_date": booking.booking_date,
-                "created_at": booking.created_at
-            }
-            for booking, place, user in rows
-        ]
-    
-    async def cancel_booking(self, booking_id: int, user_id: int) -> bool:
+        past_bookings = result.scalars().all()
+        
+        count = 0
+        for booking in past_bookings:
+            booking.status = "archived"
+            count += 1
+        
+        if count > 0:
+            await self.db.commit()
+            print(f"📦 Archived {count} past bookings")
+        
+        return count
+
+    async def cancel_booking_by_admin(self, booking_id: int, admin_id: int) -> dict:
+        """Отмена бронирования администратором"""
+        # Находим бронирование
         result = await self.db.execute(
             select(Booking).where(
                 and_(
                     Booking.id == booking_id,
-                    Booking.user_id == user_id
+                    Booking.status == "active"
                 )
             )
         )
         booking = result.scalar_one_or_none()
         if not booking:
-            return False
+            return {"success": False, "message": "Бронирование не найдено или уже отменено"}
         
-        await self.db.delete(booking)
+        # Проверяем, что администратор существует
+        admin_result = await self.db.execute(
+            select(User).where(User.id == admin_id)
+        )
+        admin = admin_result.scalar_one_or_none()
+        if not admin:
+            return {"success": False, "message": "Администратор не найден"}
+        
+        # Отменяем бронирование
+        booking.status = "cancelled_by_admin"
+        booking.cancelled_by = admin_id
+        booking.cancelled_at = datetime.now(timezone.utc)
+        
         await self.db.commit()
-        return True
+        
+        return {
+            "success": True,
+            "message": "Бронирование отменено администратором",
+            "booking": booking
+        }

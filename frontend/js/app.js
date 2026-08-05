@@ -604,3 +604,95 @@ async function handleBookingConfirmation() {
         }
     }
 }
+
+// Добавьте функцию отмены бронирования
+async function cancelUserBooking(bookingId, placeNumber) {
+    if (!confirm(`Вы уверены, что хотите отменить бронирование места ${placeNumber}?`)) {
+        return;
+    }
+    
+    try {
+        const userId = auth.getUserId();
+        const response = await fetch(`${API_BASE}/bookings/${bookingId}/cancel?user_id=${userId}`, {
+            method: 'DELETE'
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showBookingNotification('✅ Бронирование отменено!', 'success');
+            loadPlaces();
+        } else {
+            showBookingNotification('❌ ' + (data.detail || 'Ошибка отмены'), 'error');
+        }
+    } catch (error) {
+        console.error('Error canceling booking:', error);
+        showBookingNotification('❌ Ошибка соединения с сервером', 'error');
+    }
+}
+
+// Обновите renderPlaces для отображения кнопки отмены
+function renderPlaces(places) {
+    const grid = document.getElementById('placesGrid');
+    if (!grid) return;
+    
+    grid.innerHTML = '';
+    
+    places.forEach(place => {
+        const div = document.createElement('div');
+        div.className = 'place-item';
+        
+        let statusClass = '';
+        let canBook = false;
+        let canCancel = false;
+        
+        if (place.is_booked) {
+            if (place.booked_by === auth.getUserId()) {
+                statusClass = 'your-booking';
+                // Можно отменить, если бронирование не на сегодня
+                if (place.can_cancel) {
+                    canCancel = true;
+                }
+            } else {
+                statusClass = 'booked';
+            }
+        } else {
+            statusClass = 'free';
+            if (!place.user_has_booking) {
+                canBook = true;
+            }
+        }
+        div.classList.add(statusClass);
+        
+        div.innerHTML = `
+            <span>${place.place_number}</span>
+            <span class="block-label">${place.block}</span>
+        `;
+        
+        // Добавляем кнопку отмены для своих бронирований
+        if (canCancel) {
+            const cancelBtn = document.createElement('div');
+            cancelBtn.style.cssText = `
+                position: absolute;
+                bottom: 2px;
+                font-size: 8px;
+                background: rgba(255,255,255,0.2);
+                padding: 2px 6px;
+                border-radius: 4px;
+                cursor: pointer;
+            `;
+            cancelBtn.textContent = '✕ Отменить';
+            cancelBtn.onclick = (e) => {
+                e.stopPropagation();
+                cancelUserBooking(place.booking_id, place.place_number);
+            };
+            div.appendChild(cancelBtn);
+        }
+        
+        if (canBook) {
+            div.addEventListener('click', () => openBookingModal(place));
+        }
+        
+        grid.appendChild(div);
+    });
+}
