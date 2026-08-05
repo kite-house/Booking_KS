@@ -13,67 +13,37 @@ class AuthService:
         )
         return result.scalar_one_or_none()
     
-    async def create_user(self, employee_id: str) -> User:
+    async def register_user(self, employee_id: str, password: str) -> dict:
+        """Регистрация нового пользователя"""
+        # Проверяем, существует ли пользователь
+        existing_user = await self.get_user_by_employee_id(employee_id)
+        if existing_user:
+            return {
+                "success": False,
+                "message": "Пользователь с таким ID уже существует",
+                "user": existing_user
+            }
+        
+        # Создаем нового пользователя
+        hashed_password = hashlib.sha256(password.encode()).hexdigest()
         user = User(
             employee_id=employee_id,
             has_access=False,
-            role="user"
+            role="user",
+            password=hashed_password
         )
         self.db.add(user)
         await self.db.commit()
         await self.db.refresh(user)
-        return user
+        
+        return {
+            "success": True,
+            "message": "Пользователь зарегистрирован",
+            "user": user
+        }
     
-    async def check_admin_password_required(self, employee_id: str) -> dict:
-        user = await self.get_user_by_employee_id(employee_id)
-        
-        if not user:
-            user = await self.create_user(employee_id)
-            return {
-                "user": user,
-                "requires_password": False,
-                "is_admin": False,
-                "message": "Запрос на доступ отправлен администратору",
-                "has_access": False
-            }
-        
-        is_admin = user.role in ["admin", "super_admin"]
-        has_password = user.password is not None and user.password != ""
-        
-        if is_admin and has_password:
-            return {
-                "user": user,
-                "requires_password": True,
-                "is_admin": True,
-                "message": "Введите пароль администратора",
-                "has_access": True
-            }
-        elif is_admin and not has_password:
-            return {
-                "user": user,
-                "requires_password": False,
-                "is_admin": True,
-                "message": "Ошибка: у администратора не установлен пароль",
-                "has_access": False
-            }
-        elif user.has_access:
-            return {
-                "user": user,
-                "requires_password": False,
-                "is_admin": False,
-                "message": "Добро пожаловать!",
-                "has_access": True
-            }
-        else:
-            return {
-                "user": user,
-                "requires_password": False,
-                "is_admin": False,
-                "message": "Ожидайте подтверждения доступа от администратора",
-                "has_access": False
-            }
-    
-    async def verify_admin_password(self, employee_id: str, password: str) -> dict:
+    async def login_user(self, employee_id: str, password: str) -> dict:
+        """Логин пользователя"""
         user = await self.get_user_by_employee_id(employee_id)
         
         if not user:
@@ -82,76 +52,54 @@ class AuthService:
                 "message": "Пользователь не найден"
             }
         
-        if user.role not in ["admin", "super_admin"]:
-            return {
-                "success": False,
-                "message": "У пользователя нет прав администратора"
-            }
-        
-        if not user.password:
-            return {
-                "success": False,
-                "message": "У администратора не установлен пароль"
-            }
-        
+        # Проверяем пароль
         hashed_password = hashlib.sha256(password.encode()).hexdigest()
-        if user.password == hashed_password:
-            return {
-                "success": True,
-                "user": user,
-                "message": "Пароль верный"
-            }
-        else:
+        if user.password != hashed_password:
             return {
                 "success": False,
                 "message": "Неверный пароль"
             }
-    
-    async def authenticate_user(self, employee_id: str) -> dict:
-        user = await self.get_user_by_employee_id(employee_id)
         
-        if not user:
-            user = await self.create_user(employee_id)
+        if user.role in ["admin", "super_admin"]:
             return {
+                "success": True,
                 "user": user,
-                "is_new": True,
-                "has_access": False,
-                "message": "Запрос на доступ отправлен администратору"
+                "is_admin": True,
+                "has_access": True,
+                "message": "Добро пожаловать, администратор!"
             }
-        
-        if user.has_access:
+        elif user.has_access:
             return {
+                "success": True,
                 "user": user,
-                "is_new": False,
+                "is_admin": False,
                 "has_access": True,
                 "message": "Добро пожаловать!"
             }
         else:
             return {
+                "success": True,
                 "user": user,
-                "is_new": False,
+                "is_admin": False,
                 "has_access": False,
-                "message": "Ожидайте подтверждения доступа от администратора"
+                "message": "Ваш доступ ожидает подтверждения от администратора"
             }
     
-    async def create_admin(self, employee_id: str, password: str) -> User:
-        hashed_password = hashlib.sha256(password.encode()).hexdigest()
-        user = User(
-            employee_id=employee_id,
-            has_access=True,
-            role="admin",
-            password=hashed_password
-        )
-        self.db.add(user)
-        await self.db.commit()
-        await self.db.refresh(user)
-        return user
+    async def check_user_exists(self, employee_id: str) -> dict:
+        """Проверка существования пользователя"""
+        user = await self.get_user_by_employee_id(employee_id)
+        return {
+            "exists": user is not None,
+            "user": user
+        }
     
-    async def update_admin_password(self, employee_id: str, new_password: str) -> bool:
+    async def authenticate_admin(self, employee_id: str, password: str) -> User | None:
         user = await self.get_user_by_employee_id(employee_id)
         if not user or user.role not in ["admin", "super_admin"]:
-            return False
+            return None
         
-        user.password = hashlib.sha256(new_password.encode()).hexdigest()
-        await self.db.commit()
-        return True
+        hashed_password = hashlib.sha256(password.encode()).hexdigest()
+        if user.password == hashed_password:
+            return user
+        
+        return None

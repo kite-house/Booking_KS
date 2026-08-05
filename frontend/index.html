@@ -12,13 +12,31 @@
         <div id="auth-section" class="container">
             <div class="auth-card">
                 <h1>KS Бронирование</h1>
-                <div class="auth-form">
-                    <input type="text" id="employeeId" placeholder="Введите Employee ID (только цифры)" class="input-field" pattern="\d*" inputmode="numeric">
-                    <button id="loginBtn" class="btn-primary">Войти</button>
+                
+                <!-- Шаг 1: Ввод ID -->
+                <div id="step1" class="auth-step active">
+                    <div class="auth-form">
+                        <input type="text" id="employeeId" placeholder="Введите ID (только цифры)" class="input-field" pattern="\d*" inputmode="numeric">
+                        <button id="checkIdBtn" class="btn-primary">Продолжить</button>
+                    </div>
+                    <div style="margin-top: 8px; font-size: 12px; color: #909090; text-align: center;">
+                        ⚠️ Employee ID должен содержать только цифры
+                    </div>
+                    <div id="authMessage" class="message"></div>
                 </div>
-                <div id="authMessage" class="message"></div>
-                <div style="margin-top: 12px; font-size: 12px; color: #909090; text-align: center;">
-                    ⚠️ Employee ID должен содержать только цифры
+
+                <!-- Шаг 2: Регистрация/Вход -->
+                <div id="step2" class="auth-step" style="display: none;">
+                    <h3 id="step2Title" style="margin-bottom: 16px; color: #e0e0e0; text-align: center;">Создание аккаунта</h3>
+                    <div class="auth-form">
+                        <p id="step2Info" style="color: #909090; margin-bottom: 12px; text-align: center;"></p>
+                        <input type="password" id="passwordInput" placeholder="Введите пароль (мин. 4 символа)" class="input-field">
+                        <input type="password" id="passwordConfirm" placeholder="Повторите пароль" class="input-field" style="display: block;">
+                        <button id="registerBtn" class="btn-primary">Зарегистрироваться</button>
+                        <button id="loginBtn" class="btn-primary" style="display: none;">Войти</button>
+                        <button id="backToStep1" class="btn-secondary">Назад</button>
+                    </div>
+                    <div id="step2Message" class="message"></div>
                 </div>
             </div>
         </div>
@@ -77,7 +95,7 @@
                 <div class="header-content">
                     <h1>Админ панель</h1>
                     <div class="user-info">
-                        <span>Администратор</span>
+                        <span id="adminName">Администратор</span>
                         <button id="adminLogoutBtn" class="btn-secondary">Выйти</button>
                     </div>
                 </div>

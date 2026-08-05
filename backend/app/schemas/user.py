@@ -13,14 +13,17 @@ class UserCreate(UserBase):
             raise ValueError('Employee ID должен содержать только цифры')
         return v
 
-class AdminPasswordCheck(BaseModel):
+class UserRegister(BaseModel):
+    employee_id: str
+    password: str = Field(..., min_length=4, max_length=50)
+
+class AdminLogin(BaseModel):
     employee_id: str
     password: str
 
-class AdminPasswordResponse(BaseModel):
-    requires_password: bool
-    is_admin: bool
-    message: str
+class UserLogin(BaseModel):
+    employee_id: str
+    password: str
 
 class UserResponse(UserBase):
     id: int

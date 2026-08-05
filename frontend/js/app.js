@@ -8,6 +8,16 @@ let placesCache = {};
 let loadPlacesTimeout = null;
 let isBookingInProgress = false;
 
+// Отображение ID на одной строке при вводе
+document.getElementById('employeeId')?.addEventListener('input', function() {
+    const displaySpan = document.getElementById('displayEmployeeId');
+    if (displaySpan) {
+        const value = this.value.trim();
+        displaySpan.textContent = value ? value : '';
+        displaySpan.style.color = value ? '#7b2ffc' : '#e0e0e0';
+    }
+});
+
 // Функции для работы с датами
 function formatDateKey(date) {
     const year = date.getUTCFullYear();
@@ -115,6 +125,7 @@ function showMainSection() {
     const userName = document.getElementById('userName');
     if (userName && auth.currentUser) {
         userName.textContent = `ID: ${auth.currentUser.employee_id}`;
+        userName.style.whiteSpace = 'nowrap';
     }
     
     renderDateScroll();
@@ -130,11 +141,186 @@ function showAdminSection() {
     if (mainSection) mainSection.style.display = 'none';
     if (adminSection) adminSection.style.display = 'block';
     
+    const adminName = document.getElementById('adminName');
+    if (adminName && auth.currentUser) {
+        adminName.textContent = `Администратор (ID: ${auth.currentUser.employee_id})`;
+        adminName.style.whiteSpace = 'nowrap';
+    }
+    
     if (typeof loadPendingUsers === 'function') loadPendingUsers();
     if (typeof initAdmin === 'function') initAdmin();
     if (typeof loadHistory === 'function') loadHistory();
     if (typeof setupAdminTabs === 'function') setupAdminTabs();
 }
+
+// Шаг 1: Проверка ID
+document.getElementById('checkIdBtn')?.addEventListener('click', async () => {
+    const employeeId = document.getElementById('employeeId').value.trim();
+    
+    if (!employeeId) {
+        showAuthMessage('❌ Пожалуйста, введите Employee ID');
+        return;
+    }
+    
+    if (!/^\d+$/.test(employeeId)) {
+        showAuthMessage('❌ Employee ID должен содержать только цифры');
+        return;
+    }
+
+    const result = await auth.checkUser(employeeId);
+    
+    if (!result.success) {
+        showAuthMessage('❌ ' + result.error);
+        return;
+    }
+
+    window.tempEmployeeId = employeeId;
+    
+    if (result.data.exists) {
+        showStep2(false);
+    } else {
+        showStep2(true);
+    }
+});
+
+// Шаг 2: Регистрация/Вход
+function showStep2(isNewUser) {
+    document.getElementById('step1').style.display = 'none';
+    document.getElementById('step2').style.display = 'block';
+    
+    const title = document.getElementById('step2Title');
+    const info = document.getElementById('step2Info');
+    const registerBtn = document.getElementById('registerBtn');
+    const loginBtn = document.getElementById('loginBtn');
+    const passwordConfirm = document.getElementById('passwordConfirm');
+    
+    if (isNewUser) {
+        title.textContent = '📝 Регистрация';
+        info.textContent = `Создайте пароль для ID: ${window.tempEmployeeId}`;
+        registerBtn.style.display = 'block';
+        loginBtn.style.display = 'none';
+        passwordConfirm.style.display = 'block';
+    } else {
+        title.textContent = '🔐 Вход';
+        info.textContent = `Введите пароль для ID: ${window.tempEmployeeId}`;
+        registerBtn.style.display = 'none';
+        loginBtn.style.display = 'block';
+        passwordConfirm.style.display = 'none';
+    }
+    
+    document.getElementById('passwordInput').value = '';
+    document.getElementById('passwordConfirm').value = '';
+    document.getElementById('step2Message').style.display = 'none';
+}
+
+// Регистрация
+document.getElementById('registerBtn')?.addEventListener('click', async () => {
+    const password = document.getElementById('passwordInput').value;
+    const passwordConfirm = document.getElementById('passwordConfirm').value;
+    const messageDiv = document.getElementById('step2Message');
+    
+    if (!password || password.length < 4) {
+        messageDiv.textContent = '❌ Пароль должен быть не менее 4 символов';
+        messageDiv.className = 'message error';
+        messageDiv.style.display = 'block';
+        return;
+    }
+    
+    if (password !== passwordConfirm) {
+        messageDiv.textContent = '❌ Пароли не совпадают';
+        messageDiv.className = 'message error';
+        messageDiv.style.display = 'block';
+        return;
+    }
+
+    const result = await auth.register(window.tempEmployeeId, password);
+    
+    if (result.success) {
+        localStorage.setItem('user', JSON.stringify(auth.currentUser));
+        localStorage.setItem('token', auth.token);
+        
+        messageDiv.textContent = '✅ Регистрация успешна!';
+        messageDiv.className = 'message success';
+        messageDiv.style.display = 'block';
+        
+        setTimeout(() => {
+            document.getElementById('step1').style.display = 'block';
+            document.getElementById('step2').style.display = 'none';
+            document.getElementById('employeeId').value = '';
+            window.tempEmployeeId = null;
+            
+            showAuthMessage('⏳ Ваш запрос на доступ отправлен администратору. Ожидайте подтверждения!');
+        }, 1500);
+    } else {
+        messageDiv.textContent = '❌ ' + result.error;
+        messageDiv.className = 'message error';
+        messageDiv.style.display = 'block';
+    }
+});
+
+// Вход
+document.getElementById('loginBtn')?.addEventListener('click', async () => {
+    const password = document.getElementById('passwordInput').value;
+    const messageDiv = document.getElementById('step2Message');
+    
+    if (!password) {
+        messageDiv.textContent = '❌ Введите пароль';
+        messageDiv.className = 'message error';
+        messageDiv.style.display = 'block';
+        return;
+    }
+
+    const result = await auth.login(window.tempEmployeeId, password);
+    
+    if (result.success) {
+        localStorage.setItem('user', JSON.stringify(auth.currentUser));
+        localStorage.setItem('token', auth.token);
+        
+        if (auth.isAdmin()) {
+            showAdminSection();
+        } else if (auth.hasAccess()) {
+            showMainSection();
+        } else {
+            document.getElementById('step1').style.display = 'block';
+            document.getElementById('step2').style.display = 'none';
+            document.getElementById('employeeId').value = '';
+            window.tempEmployeeId = null;
+            showAuthMessage('⏳ Ваш доступ ожидает подтверждения от администратора');
+        }
+    } else {
+        messageDiv.textContent = '❌ ' + result.error;
+        messageDiv.className = 'message error';
+        messageDiv.style.display = 'block';
+    }
+});
+
+// Назад к шагу 1
+document.getElementById('backToStep1')?.addEventListener('click', () => {
+    document.getElementById('step1').style.display = 'block';
+    document.getElementById('step2').style.display = 'none';
+    document.getElementById('authMessage').style.display = 'none';
+    window.tempEmployeeId = null;
+});
+
+// Enter key для шага 1
+document.getElementById('employeeId')?.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        document.getElementById('checkIdBtn')?.click();
+    }
+});
+
+// Enter key для пароля
+document.getElementById('passwordInput')?.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        const registerBtn = document.getElementById('registerBtn');
+        const loginBtn = document.getElementById('loginBtn');
+        if (registerBtn.style.display !== 'none') {
+            registerBtn.click();
+        } else {
+            loginBtn.click();
+        }
+    }
+});
 
 document.addEventListener('DOMContentLoaded', () => {
     const savedUser = localStorage.getItem('user');
@@ -179,6 +365,12 @@ function showAuthMessage(message) {
     const messageDiv = document.getElementById('authMessage');
     if (!messageDiv) return;
     
+    // При показе сообщения скрываем отображение ID
+    const displaySpan = document.getElementById('displayEmployeeId');
+    if (displaySpan) {
+        displaySpan.textContent = '';
+    }
+    
     messageDiv.className = 'message info';
     messageDiv.style.display = 'block';
     messageDiv.style.padding = '20px';
@@ -192,161 +384,39 @@ function showAuthMessage(message) {
     messageDiv.textContent = message;
 }
 
-// frontend/js/app.js
-// ... в начале файла
-
-// Login handler
-document.getElementById('loginBtn')?.addEventListener('click', async () => {
-    const employeeId = document.getElementById('employeeId').value.trim();
-    
-    // Валидация
-    if (!employeeId) {
-        showAuthMessage('❌ Пожалуйста, введите Employee ID');
-        return;
-    }
-    
-    if (!/^\d+$/.test(employeeId)) {
-        showAuthMessage('❌ Employee ID должен содержать только цифры');
-        return;
-    }
-
-    // Проверяем, является ли пользователь администратором
-    const checkResult = await auth.checkAdmin(employeeId);
-    
-    if (!checkResult.success) {
-        showAuthMessage('❌ ' + checkResult.error);
-        return;
-    }
-
-    const data = checkResult.data;
-
-    if (data.requires_password) {
-        // Администратор - запрашиваем пароль
-        showAdminPasswordPrompt(employeeId);
-        return;
-    }
-
-    if (data.has_access) {
-        // Обычный пользователь с доступом
-        auth.currentUser = data.user;
-        localStorage.setItem('user', JSON.stringify(auth.currentUser));
-        localStorage.setItem('token', auth.token);
-        showMainSection();
-    } else {
-        // Пользователь без доступа
-        auth.currentUser = data.user;
-        localStorage.setItem('user', JSON.stringify(auth.currentUser));
-        showAuthSection('⏳ ' + data.message);
-    }
-});
-
-// Функция для запроса пароля администратора
-function showAdminPasswordPrompt(employeeId) {
-    const modal = document.createElement('div');
-    modal.id = 'adminPasswordModal';
-    modal.className = 'modal';
-    modal.style.display = 'flex';
-    modal.style.background = 'rgba(0, 0, 0, 0.8)';
-    modal.style.zIndex = '2000';
-    
-    modal.innerHTML = `
-        <div class="modal-content" style="max-width: 400px;">
-            <h2 style="margin-bottom: 16px;">🔐 Вход для администратора</h2>
-            <p style="color: #909090; margin-bottom: 16px;">Введите пароль для ID: <strong>${employeeId}</strong></p>
-            <div class="auth-form">
-                <input type="password" id="adminPasswordInput" placeholder="Введите пароль" class="input-field">
-                <div style="display: flex; gap: 12px; margin-top: 12px;">
-                    <button id="confirmAdminPasswordBtn" class="btn-primary" style="flex: 1;">Войти</button>
-                    <button id="cancelAdminPasswordBtn" class="btn-secondary" style="flex: 1;">Отмена</button>
-                </div>
-                <div id="adminPasswordMessage" style="margin-top: 12px; color: #ff1744; text-align: center;"></div>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    
-    const passwordInput = document.getElementById('adminPasswordInput');
-    const confirmBtn = document.getElementById('confirmAdminPasswordBtn');
-    const cancelBtn = document.getElementById('cancelAdminPasswordBtn');
-    const messageDiv = document.getElementById('adminPasswordMessage');
-    
-    passwordInput?.focus();
-    
-    const handleConfirm = async () => {
-        const password = passwordInput.value.trim();
-        if (!password) {
-            messageDiv.textContent = '❌ Пожалуйста, введите пароль';
-            return;
-        }
-        
-        confirmBtn.disabled = true;
-        confirmBtn.textContent = '⏳ Проверка...';
-        
-        const result = await auth.verifyAdmin(employeeId, password);
-        
-        if (result.success) {
-            localStorage.setItem('user', JSON.stringify(auth.currentUser));
-            localStorage.setItem('token', auth.token);
-            document.body.removeChild(modal);
-            showAdminSection();
-        } else {
-            messageDiv.textContent = '❌ ' + result.error;
-            confirmBtn.disabled = false;
-            confirmBtn.textContent = 'Войти';
-            passwordInput.value = '';
-            passwordInput.focus();
-        }
-    };
-    
-    confirmBtn?.addEventListener('click', handleConfirm);
-    passwordInput?.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            handleConfirm();
-        }
-    });
-    cancelBtn?.addEventListener('click', () => {
-        document.body.removeChild(modal);
-        showAuthSection('Вход отменен');
-    });
-}
-
-// Enter key для обычного логина
-document.getElementById('employeeId')?.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-        document.getElementById('loginBtn')?.click();
-    }
-});
-
-// Добавляем валидацию в реальном времени
-document.getElementById('employeeId')?.addEventListener('input', (e) => {
-    const input = e.target;
-    const value = input.value;
-    
-    // Удаляем все не-цифровые символы
-    input.value = value.replace(/[^\d]/g, '');
-    
-    // Проверяем, изменилось ли значение
-    if (value !== input.value) {
-        showAuthMessage('⚠️ Employee ID должен содержать только цифры');
-    }
-});
-
-// Logout
+// Logout - мгновенный выход
 document.getElementById('logoutBtn')?.addEventListener('click', () => {
     placesCache = {};
     auth.logout();
-    showAuthSection('Вы вышли из системы');
-    const input = document.getElementById('employeeId');
-    if (input) input.value = '';
+    
+    document.getElementById('auth-section').style.display = 'block';
+    document.getElementById('main-section').style.display = 'none';
+    document.getElementById('admin-section').style.display = 'none';
+    
+    document.getElementById('step1').style.display = 'block';
+    document.getElementById('step2').style.display = 'none';
+    document.getElementById('employeeId').value = '';
+    window.tempEmployeeId = null;
+    
+    document.getElementById('authMessage').style.display = 'block';
+    showAuthMessage('Вы вышли из системы');
 });
 
 document.getElementById('adminLogoutBtn')?.addEventListener('click', () => {
     placesCache = {};
     auth.logout();
-    showAuthSection('Вы вышли из системы');
-    const input = document.getElementById('employeeId');
-    if (input) input.value = '';
+    
+    document.getElementById('auth-section').style.display = 'block';
+    document.getElementById('main-section').style.display = 'none';
+    document.getElementById('admin-section').style.display = 'none';
+    
+    document.getElementById('step1').style.display = 'block';
+    document.getElementById('step2').style.display = 'none';
+    document.getElementById('employeeId').value = '';
+    window.tempEmployeeId = null;
+    
+    document.getElementById('authMessage').style.display = 'block';
+    showAuthMessage('Вы вышли из системы');
 });
 
 // Scroll buttons
@@ -394,7 +464,6 @@ function loadPlaces() {
             const dateStr = selectedDate ? formatDateKey(selectedDate) : '';
             const cacheKey = `${userId}_${dateStr}`;
             
-            // Проверяем кеш
             if (placesCache[cacheKey]) {
                 renderPlaces(placesCache[cacheKey]);
                 loadPlacesTimeout = null;
@@ -435,10 +504,14 @@ function renderPlaces(places) {
         
         let statusClass = '';
         let canBook = false;
+        let canCancel = false;
         
         if (place.is_booked) {
             if (place.booked_by === auth.getUserId()) {
                 statusClass = 'your-booking';
+                if (place.can_cancel) {
+                    canCancel = true;
+                }
             } else {
                 statusClass = 'booked';
             }
@@ -454,6 +527,25 @@ function renderPlaces(places) {
             <span>${place.place_number}</span>
             <span class="block-label">${place.block}</span>
         `;
+        
+        if (canCancel) {
+            const cancelBtn = document.createElement('div');
+            cancelBtn.style.cssText = `
+                position: absolute;
+                bottom: 2px;
+                font-size: 8px;
+                background: rgba(255,255,255,0.2);
+                padding: 2px 6px;
+                border-radius: 4px;
+                cursor: pointer;
+            `;
+            cancelBtn.textContent = '✕ Отменить';
+            cancelBtn.onclick = (e) => {
+                e.stopPropagation();
+                cancelUserBooking(place.booking_id, place.place_number);
+            };
+            div.appendChild(cancelBtn);
+        }
         
         if (canBook) {
             div.addEventListener('click', () => openBookingModal(place));
@@ -535,6 +627,31 @@ function showBookingNotification(message, type = 'info') {
     }, 5000);
 }
 
+async function cancelUserBooking(bookingId, placeNumber) {
+    if (!confirm(`Вы уверены, что хотите отменить бронирование места ${placeNumber}?`)) {
+        return;
+    }
+    
+    try {
+        const userId = auth.getUserId();
+        const response = await fetch(`${API_BASE}/bookings/${bookingId}/cancel?user_id=${userId}`, {
+            method: 'DELETE'
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showBookingNotification('✅ Бронирование отменено!', 'success');
+            loadPlaces();
+        } else {
+            showBookingNotification('❌ ' + (data.detail || 'Ошибка отмены'), 'error');
+        }
+    } catch (error) {
+        console.error('Error canceling booking:', error);
+        showBookingNotification('❌ Ошибка соединения с сервером', 'error');
+    }
+}
+
 async function handleBookingConfirmation() {
     if (isBookingInProgress) {
         showBookingNotification('⏳ Бронирование уже выполняется...', 'info');
@@ -584,7 +701,6 @@ async function handleBookingConfirmation() {
         
         if (response.ok) {
             showBookingNotification('✅ Место успешно забронировано!', 'success');
-            // Очищаем кеш для этой даты
             const cacheKey = `${userId}_${dateStr}`;
             delete placesCache[cacheKey];
             const modal = document.getElementById('bookingModal');
@@ -603,96 +719,4 @@ async function handleBookingConfirmation() {
             confirmBtn.textContent = 'Забронировать';
         }
     }
-}
-
-// Добавьте функцию отмены бронирования
-async function cancelUserBooking(bookingId, placeNumber) {
-    if (!confirm(`Вы уверены, что хотите отменить бронирование места ${placeNumber}?`)) {
-        return;
-    }
-    
-    try {
-        const userId = auth.getUserId();
-        const response = await fetch(`${API_BASE}/bookings/${bookingId}/cancel?user_id=${userId}`, {
-            method: 'DELETE'
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            showBookingNotification('✅ Бронирование отменено!', 'success');
-            loadPlaces();
-        } else {
-            showBookingNotification('❌ ' + (data.detail || 'Ошибка отмены'), 'error');
-        }
-    } catch (error) {
-        console.error('Error canceling booking:', error);
-        showBookingNotification('❌ Ошибка соединения с сервером', 'error');
-    }
-}
-
-// Обновите renderPlaces для отображения кнопки отмены
-function renderPlaces(places) {
-    const grid = document.getElementById('placesGrid');
-    if (!grid) return;
-    
-    grid.innerHTML = '';
-    
-    places.forEach(place => {
-        const div = document.createElement('div');
-        div.className = 'place-item';
-        
-        let statusClass = '';
-        let canBook = false;
-        let canCancel = false;
-        
-        if (place.is_booked) {
-            if (place.booked_by === auth.getUserId()) {
-                statusClass = 'your-booking';
-                // Можно отменить, если бронирование не на сегодня
-                if (place.can_cancel) {
-                    canCancel = true;
-                }
-            } else {
-                statusClass = 'booked';
-            }
-        } else {
-            statusClass = 'free';
-            if (!place.user_has_booking) {
-                canBook = true;
-            }
-        }
-        div.classList.add(statusClass);
-        
-        div.innerHTML = `
-            <span>${place.place_number}</span>
-            <span class="block-label">${place.block}</span>
-        `;
-        
-        // Добавляем кнопку отмены для своих бронирований
-        if (canCancel) {
-            const cancelBtn = document.createElement('div');
-            cancelBtn.style.cssText = `
-                position: absolute;
-                bottom: 2px;
-                font-size: 8px;
-                background: rgba(255,255,255,0.2);
-                padding: 2px 6px;
-                border-radius: 4px;
-                cursor: pointer;
-            `;
-            cancelBtn.textContent = '✕ Отменить';
-            cancelBtn.onclick = (e) => {
-                e.stopPropagation();
-                cancelUserBooking(place.booking_id, place.place_number);
-            };
-            div.appendChild(cancelBtn);
-        }
-        
-        if (canBook) {
-            div.addEventListener('click', () => openBookingModal(place));
-        }
-        
-        grid.appendChild(div);
-    });
 }

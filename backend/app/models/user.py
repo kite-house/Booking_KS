@@ -9,7 +9,7 @@ class User(Base):
     employee_id = Column(String, unique=True, index=True, nullable=False)
     username = Column(String, nullable=True)
     has_access = Column(Boolean, default=False)
-    role = Column(String, default="user")
-    password = Column(String, nullable=True)  
+    role = Column(String, default="user")  # user, admin, super_admin
+    password = Column(String, nullable=True)  # Пароль для всех пользователей
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

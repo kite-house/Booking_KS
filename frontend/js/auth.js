@@ -7,7 +7,7 @@ class Auth {
         this.token = null;
     }
 
-    async checkAdmin(employeeId) {
+    async checkUser(employeeId) {
         if (!/^\d+$/.test(employeeId)) {
             return { 
                 success: false, 
@@ -16,7 +16,7 @@ class Auth {
         }
 
         try {
-            const response = await fetch(`${API_BASE}/auth/check-admin`, {
+            const response = await fetch(`${API_BASE}/auth/check-user`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -32,14 +32,14 @@ class Auth {
                 return { success: false, error: data.detail || 'Ошибка проверки' };
             }
         } catch (error) {
-            console.error('Check admin error:', error);
+            console.error('Check user error:', error);
             return { success: false, error: 'Ошибка соединения с сервером' };
         }
     }
 
-    async verifyAdmin(employeeId, password) {
+    async register(employeeId, password) {
         try {
-            const response = await fetch(`${API_BASE}/auth/verify-admin`, {
+            const response = await fetch(`${API_BASE}/auth/register`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -57,29 +57,25 @@ class Auth {
                 this.token = data.token || 'dummy-token';
                 return { success: true, data };
             } else {
-                return { success: false, error: data.detail || 'Ошибка проверки пароля' };
+                return { success: false, error: data.detail || 'Ошибка регистрации' };
             }
         } catch (error) {
-            console.error('Verify admin error:', error);
+            console.error('Register error:', error);
             return { success: false, error: 'Ошибка соединения с сервером' };
         }
     }
 
-    async login(employeeId) {
-        if (!/^\d+$/.test(employeeId)) {
-            return { 
-                success: false, 
-                error: 'Employee ID должен содержать только цифры' 
-            };
-        }
-
+    async login(employeeId, password) {
         try {
             const response = await fetch(`${API_BASE}/auth/login`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ employee_id: employeeId })
+                body: JSON.stringify({ 
+                    employee_id: employeeId, 
+                    password: password 
+                })
             });
 
             const data = await response.json();
@@ -89,7 +85,7 @@ class Auth {
                 this.token = data.token || 'dummy-token';
                 return { success: true, data };
             } else {
-                return { success: false, error: data.detail || 'Ошибка авторизации' };
+                return { success: false, error: data.detail || 'Ошибка входа' };
             }
         } catch (error) {
             console.error('Login error:', error);
