@@ -192,36 +192,143 @@ function showAuthMessage(message) {
     messageDiv.textContent = message;
 }
 
+// frontend/js/app.js
+// ... в начале файла
+
 // Login handler
 document.getElementById('loginBtn')?.addEventListener('click', async () => {
     const employeeId = document.getElementById('employeeId').value.trim();
+    
+    // Валидация
     if (!employeeId) {
         showAuthMessage('❌ Пожалуйста, введите Employee ID');
         return;
     }
-
-    const result = await auth.login(employeeId);
     
-    if (result.success) {
+    if (!/^\d+$/.test(employeeId)) {
+        showAuthMessage('❌ Employee ID должен содержать только цифры');
+        return;
+    }
+
+    // Проверяем, является ли пользователь администратором
+    const checkResult = await auth.checkAdmin(employeeId);
+    
+    if (!checkResult.success) {
+        showAuthMessage('❌ ' + checkResult.error);
+        return;
+    }
+
+    const data = checkResult.data;
+
+    if (data.requires_password) {
+        // Администратор - запрашиваем пароль
+        showAdminPasswordPrompt(employeeId);
+        return;
+    }
+
+    if (data.has_access) {
+        // Обычный пользователь с доступом
+        auth.currentUser = data.user;
         localStorage.setItem('user', JSON.stringify(auth.currentUser));
         localStorage.setItem('token', auth.token);
-        
-        if (auth.isAdmin()) {
-            showAdminSection();
-        } else if (auth.hasAccess()) {
-            showMainSection();
-        } else {
-            showAuthSection('⏳ Ваш запрос на доступ отправлен администратору. Ожидайте подтверждения!');
-        }
+        showMainSection();
     } else {
-        showAuthMessage('❌ ' + result.error);
+        // Пользователь без доступа
+        auth.currentUser = data.user;
+        localStorage.setItem('user', JSON.stringify(auth.currentUser));
+        showAuthSection('⏳ ' + data.message);
     }
 });
 
-// Enter key for login
+// Функция для запроса пароля администратора
+function showAdminPasswordPrompt(employeeId) {
+    const modal = document.createElement('div');
+    modal.id = 'adminPasswordModal';
+    modal.className = 'modal';
+    modal.style.display = 'flex';
+    modal.style.background = 'rgba(0, 0, 0, 0.8)';
+    modal.style.zIndex = '2000';
+    
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 400px;">
+            <h2 style="margin-bottom: 16px;">🔐 Вход для администратора</h2>
+            <p style="color: #909090; margin-bottom: 16px;">Введите пароль для ID: <strong>${employeeId}</strong></p>
+            <div class="auth-form">
+                <input type="password" id="adminPasswordInput" placeholder="Введите пароль" class="input-field">
+                <div style="display: flex; gap: 12px; margin-top: 12px;">
+                    <button id="confirmAdminPasswordBtn" class="btn-primary" style="flex: 1;">Войти</button>
+                    <button id="cancelAdminPasswordBtn" class="btn-secondary" style="flex: 1;">Отмена</button>
+                </div>
+                <div id="adminPasswordMessage" style="margin-top: 12px; color: #ff1744; text-align: center;"></div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    const passwordInput = document.getElementById('adminPasswordInput');
+    const confirmBtn = document.getElementById('confirmAdminPasswordBtn');
+    const cancelBtn = document.getElementById('cancelAdminPasswordBtn');
+    const messageDiv = document.getElementById('adminPasswordMessage');
+    
+    passwordInput?.focus();
+    
+    const handleConfirm = async () => {
+        const password = passwordInput.value.trim();
+        if (!password) {
+            messageDiv.textContent = '❌ Пожалуйста, введите пароль';
+            return;
+        }
+        
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = '⏳ Проверка...';
+        
+        const result = await auth.verifyAdmin(employeeId, password);
+        
+        if (result.success) {
+            localStorage.setItem('user', JSON.stringify(auth.currentUser));
+            localStorage.setItem('token', auth.token);
+            document.body.removeChild(modal);
+            showAdminSection();
+        } else {
+            messageDiv.textContent = '❌ ' + result.error;
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = 'Войти';
+            passwordInput.value = '';
+            passwordInput.focus();
+        }
+    };
+    
+    confirmBtn?.addEventListener('click', handleConfirm);
+    passwordInput?.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            handleConfirm();
+        }
+    });
+    cancelBtn?.addEventListener('click', () => {
+        document.body.removeChild(modal);
+        showAuthSection('Вход отменен');
+    });
+}
+
+// Enter key для обычного логина
 document.getElementById('employeeId')?.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
         document.getElementById('loginBtn')?.click();
+    }
+});
+
+// Добавляем валидацию в реальном времени
+document.getElementById('employeeId')?.addEventListener('input', (e) => {
+    const input = e.target;
+    const value = input.value;
+    
+    // Удаляем все не-цифровые символы
+    input.value = value.replace(/[^\d]/g, '');
+    
+    // Проверяем, изменилось ли значение
+    if (value !== input.value) {
+        showAuthMessage('⚠️ Employee ID должен содержать только цифры');
     }
 });
 

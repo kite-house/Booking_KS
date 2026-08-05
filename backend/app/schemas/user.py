@@ -1,22 +1,31 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 from datetime import datetime
 from typing import Optional
-from enum import Enum
-
-class UserRole(str, Enum):
-    USER = "user"
-    ADMIN = "admin"
+import re
 
 class UserBase(BaseModel):
     employee_id: str = Field(..., min_length=1, max_length=50)
 
 class UserCreate(UserBase):
-    pass
+    @validator('employee_id')
+    def validate_employee_id(cls, v):
+        if not re.match(r'^\d+$', v):
+            raise ValueError('Employee ID должен содержать только цифры')
+        return v
+
+class AdminPasswordCheck(BaseModel):
+    employee_id: str
+    password: str
+
+class AdminPasswordResponse(BaseModel):
+    requires_password: bool
+    is_admin: bool
+    message: str
 
 class UserResponse(UserBase):
     id: int
     has_access: bool
-    role: UserRole
+    role: str
     created_at: datetime
     
     class Config:

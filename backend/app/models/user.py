@@ -9,6 +9,7 @@ class User(Base):
     employee_id = Column(String, unique=True, index=True, nullable=False)
     username = Column(String, nullable=True)
     has_access = Column(Boolean, default=False)
-    role = Column(String(50), default="user")  # VARCHAR вместо ENUM
+    role = Column(String, default="user")
+    password = Column(String, nullable=True)  
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

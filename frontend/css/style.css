@@ -732,3 +732,26 @@ body {
     background: #00c853;
     border: 2px solid #00e676;
 }
+
+/* Ошибка валидации */
+.input-field.error {
+    border-color: #ff1744 !important;
+    box-shadow: 0 0 0 2px rgba(255, 23, 68, 0.2) !important;
+}
+
+.input-field.success {
+    border-color: #00c853 !important;
+    box-shadow: 0 0 0 2px rgba(0, 200, 83, 0.2) !important;
+}
+
+.message.error {
+    background: rgba(255, 23, 68, 0.15);
+    color: #ff1744;
+    border: 2px solid rgba(255, 23, 68, 0.3);
+}
+
+.message.warning {
+    background: rgba(255, 193, 7, 0.15);
+    color: #ffc107;
+    border: 2px solid rgba(255, 193, 7, 0.3);
+}
