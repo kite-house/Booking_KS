@@ -229,8 +229,8 @@ class BookingService:
         for booking, place, user in rows:
             # Формируем запись с действием
             action = "Создано"
-            action_color = "#00c853"
-            action_bg = "rgba(0, 200, 83, 0.15)"
+            action_color = "#78909c" 
+            action_bg = "rgba(120, 144, 156, 0.15)"
             
             if booking.status == "cancelled_by_user":
                 action = "Отменено пользователем"
@@ -242,8 +242,8 @@ class BookingService:
                 action_bg = "rgba(255, 109, 0, 0.15)"
             elif booking.status == "archived":
                 action = "Выполнено"
-                action_color = "#78909c"
-                action_bg = "rgba(120, 144, 156, 0.15)"
+                action_color = "#00c853"
+                action_bg = "rgba(0, 200, 83, 0.15)"
             
             booking_dict = {
                 "id": booking.id,
