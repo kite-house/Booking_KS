@@ -523,9 +523,51 @@ function renderPlaces(places) {
         }
         div.classList.add(statusClass);
         
+        // Вычисляем блок и цифру
+        const placeNumber = place.place_number;
+        let blockNumber, digitNumber, isExtra = false;
+        
+        if (placeNumber >= 1 && placeNumber <= 18) {
+            blockNumber = 1;
+            digitNumber = Math.ceil(placeNumber / 2);
+        } else if (placeNumber >= 19 && placeNumber <= 20) {
+            blockNumber = 1;
+            isExtra = true;
+            digitNumber = null;
+        } else if (placeNumber >= 21 && placeNumber <= 38) {
+            blockNumber = 2;
+            const localNum = placeNumber - 20;
+            digitNumber = Math.ceil(localNum / 2);
+        } else if (placeNumber >= 39 && placeNumber <= 40) {
+            blockNumber = 2;
+            isExtra = true;
+            digitNumber = null;
+        } else if (placeNumber >= 41 && placeNumber <= 58) {
+            blockNumber = 3;
+            const localNum = placeNumber - 40;
+            digitNumber = Math.ceil(localNum / 2);
+        } else if (placeNumber >= 59 && placeNumber <= 60) {
+            blockNumber = 3;
+            isExtra = true;
+            digitNumber = null;
+        }
+        
+        // Формируем текст
+        const blockText = `Б${blockNumber}`;
+        const ksText = `КС${placeNumber}`;
+        
+        let bottomText = '';
+        if (isExtra) {
+            bottomText = `${blockText} ДОП`;
+        } else {
+            bottomText = `${blockText} Ц${digitNumber}`;
+        }
+        
         div.innerHTML = `
-            <span>${place.place_number}</span>
-            <span class="block-label">${place.block}</span>
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; padding: 4px;">
+                <span style="font-size: 11px; font-weight: 600; opacity: 0.9; text-align: center; line-height: 1.2;">СЦ КРСС ${ksText}</span>
+                <span style="font-size: 10px; font-weight: 400; opacity: 0.8; margin-top: 2px;">${bottomText}</span>
+            </div>
         `;
         
         if (canCancel) {
@@ -561,13 +603,53 @@ function openBookingModal(place) {
     const dateInfo = document.getElementById('dateInfo');
     const confirmBtn = document.getElementById('confirmBookingBtn');
     
-    if (placeInfo) {
-        placeInfo.textContent = `Место ${place.place_number} (Блок ${place.block})`;
+    // Вычисляем блок и цифру для отображения
+    const placeNumber = place.place_number;
+    let blockNumber, digitNumber, isExtra = false;
+    
+    if (placeNumber >= 1 && placeNumber <= 18) {
+        blockNumber = 1;
+        digitNumber = Math.ceil(placeNumber / 2);
+    } else if (placeNumber >= 19 && placeNumber <= 20) {
+        blockNumber = 1;
+        isExtra = true;
+        digitNumber = null;
+    } else if (placeNumber >= 21 && placeNumber <= 38) {
+        blockNumber = 2;
+        const localNum = placeNumber - 20;
+        digitNumber = Math.ceil(localNum / 2);
+    } else if (placeNumber >= 39 && placeNumber <= 40) {
+        blockNumber = 2;
+        isExtra = true;
+        digitNumber = null;
+    } else if (placeNumber >= 41 && placeNumber <= 58) {
+        blockNumber = 3;
+        const localNum = placeNumber - 40;
+        digitNumber = Math.ceil(localNum / 2);
+    } else if (placeNumber >= 59 && placeNumber <= 60) {
+        blockNumber = 3;
+        isExtra = true;
+        digitNumber = null;
     }
+    
+    const blockText = `Б${blockNumber}`;
+    let fullText = `СЦ КРСС КС${placeNumber}`;
+    
+    if (isExtra) {
+        fullText += ` ${blockText} ДОП`;
+    } else {
+        fullText += ` ${blockText} Ц${digitNumber}`;
+    }
+    
+    if (placeInfo) {
+        placeInfo.textContent = fullText;
+    }
+    
     if (dateInfo && selectedDate) {
         const dateInfoObj = formatDateDisplay(selectedDate);
         dateInfo.textContent = `📅 ${dateInfoObj.dayName}, ${dateInfoObj.dayNumber} ${dateInfoObj.month}`;
     }
+    
     if (confirmBtn) {
         confirmBtn.dataset.placeId = place.place_id;
         const dateStr = selectedDate ? formatDateKey(selectedDate) : '';

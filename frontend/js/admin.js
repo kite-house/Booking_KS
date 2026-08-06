@@ -135,8 +135,54 @@ function adminRenderPlaces(places) {
         let statusClass = place.is_booked ? 'booked' : 'free';
         div.classList.add(statusClass);
         
+        // Вычисляем блок и цифру
+        const placeNumber = place.place_number;
+        let blockNumber, digitNumber, isExtra = false;
+        
+        if (placeNumber >= 1 && placeNumber <= 18) {
+            blockNumber = 1;
+            digitNumber = Math.ceil(placeNumber / 2);
+        } else if (placeNumber >= 19 && placeNumber <= 20) {
+            blockNumber = 1;
+            isExtra = true;
+            digitNumber = null;
+        } else if (placeNumber >= 21 && placeNumber <= 38) {
+            blockNumber = 2;
+            const localNum = placeNumber - 20;
+            digitNumber = Math.ceil(localNum / 2);
+        } else if (placeNumber >= 39 && placeNumber <= 40) {
+            blockNumber = 2;
+            isExtra = true;
+            digitNumber = null;
+        } else if (placeNumber >= 41 && placeNumber <= 58) {
+            blockNumber = 3;
+            const localNum = placeNumber - 40;
+            digitNumber = Math.ceil(localNum / 2);
+        } else if (placeNumber >= 59 && placeNumber <= 60) {
+            blockNumber = 3;
+            isExtra = true;
+            digitNumber = null;
+        }
+        
+        // Формируем текст
+        const blockText = `Б${blockNumber}`;
+        const ksText = `КС${placeNumber}`;
+        
+        let bottomText = '';
+        if (isExtra) {
+            bottomText = `${blockText} ДОП`;
+        } else {
+            bottomText = `${blockText} Ц${digitNumber}`;
+        }
+        
+        div.innerHTML = `
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; padding: 4px;">
+                <span style="font-size: 11px; font-weight: 600; opacity: 0.9; text-align: center; line-height: 1.2;">СЦ КРСС ${ksText}</span>
+                <span style="font-size: 10px; font-weight: 400; opacity: 0.8; margin-top: 2px;">${bottomText}</span>
+            </div>
+        `;
+        
         if (place.is_booked) {
-            // Показываем Employee ID
             const info = document.createElement('div');
             info.style.cssText = `
                 position: absolute;
@@ -147,30 +193,25 @@ function adminRenderPlaces(places) {
                 border-radius: 4px;
                 white-space: nowrap;
                 cursor: pointer;
+                right: 2px;
             `;
-            // Используем booking_id из данных
             const employeeId = place.booked_employee_id || place.booked_by || '?';
             info.textContent = `👤 ${employeeId}`;
             info.title = 'Нажмите для отмены брони';
             
-            // Если есть booking_id, добавляем обработчик
             if (place.booking_id) {
                 info.onclick = (e) => {
                     e.stopPropagation();
                     adminCancelBooking(place.booking_id, place.place_number);
                 };
                 div.style.cursor = 'pointer';
+                div.title = 'Нажмите для отмены брони';
                 div.onclick = () => {
                     adminCancelBooking(place.booking_id, place.place_number);
                 };
             }
             div.appendChild(info);
         }
-        
-        div.innerHTML += `
-            <span>${place.place_number}</span>
-            <span class="block-label">${place.block}</span>
-        `;
         
         grid.appendChild(div);
     });
@@ -372,39 +413,39 @@ function loadAdminBookings() {
                 return;
             }
             
-            container.innerHTML = bookings.map(booking => `
-                <div style="
-                    padding: 16px 20px;
-                    background: #1a1a1a;
-                    border-radius: 8px;
-                    margin-bottom: 8px;
-                    border-left: 4px solid #7b2ffc;
-                ">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <strong>📍 Место ${booking.place_number}</strong>
-                            <span style="margin-left: 12px; color: #909090;">
-                                Блок ${booking.block}
-                            </span>
-                            <span style="margin-left: 12px; color: #909090;">
-                                👤 Пользователь: <strong>${booking.employee_id || booking.user_id}</strong>
-                            </span>
-                            <span style="margin-left: 12px; color: #909090;">
-                                📅 ${new Date(booking.booking_date).toLocaleString()}
-                            </span>
-                        </div>
+            container.innerHTML = bookings.map(booking => {
+                const fullText = `СЦ КРСС КС${booking.place_number}`;
+                
+                return `
+                    <div style="
+                        padding: 10px 16px;
+                        background: #1a1a1a;
+                        border-radius: 8px;
+                        margin-bottom: 6px;
+                        border-left: 4px solid #7b2ffc;
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        gap: 12px;
+                        flex-wrap: nowrap;
+                    ">
+                        <span style="color: #e0e0e0; font-size: 14px; white-space: nowrap; font-weight: 500;">${fullText}</span>
+                        <span style="color: #909090; font-size: 13px; white-space: nowrap;">👤 ${booking.employee_id || booking.user_id}</span>
+                        <span style="color: #909090; font-size: 13px; white-space: nowrap;">📅 ${new Date(booking.booking_date).toLocaleDateString()}</span>
                         <button onclick="adminCancelBooking(${booking.id}, ${booking.place_number})" style="
-                            padding: 6px 16px;
+                            padding: 4px 14px;
                             background: #ff1744;
                             color: white;
                             border: none;
-                            border-radius: 6px;
+                            border-radius: 4px;
                             cursor: pointer;
+                            font-size: 12px;
                             font-weight: 500;
-                        ">❌ Отменить</button>
+                            white-space: nowrap;
+                        ">Отменить</button>
                     </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         } catch (error) {
             console.error('Error loading bookings:', error);
         }
@@ -431,14 +472,34 @@ function loadHistory() {
             if (bookings.length === 0) {
                 container.innerHTML = `
                     <div style="text-align: center; padding: 40px; color: #909090;">
-                        <p style="font-size: 18px;">📭 История пуста</p>
-                        <p style="font-size: 14px; margin-top: 8px;">Здесь будут отображаться все действия с бронированиями</p>
+                        <p style="font-size: 18px;">История пуста</p>
                     </div>
                 `;
                 return;
             }
             
             container.innerHTML = bookings.map(booking => {
+                const fullText = `СЦ КРСС КС${booking.place_number}`;
+                
+                let statusText = 'Создано';
+                let statusColor = '#78909c';
+                let statusBg = 'rgba(120, 144, 156, 0.15)';
+                
+                if (booking.status === 'cancelled_by_user') {
+                    statusText = 'Отменено пользователем';
+                    statusColor = '#ff1744';
+                    statusBg = 'rgba(255, 23, 68, 0.15)';
+                } else if (booking.status === 'cancelled_by_admin') {
+                    const canceller = booking.canceller_employee_id || booking.cancelled_by;
+                    statusText = `Отменено админом (${canceller})`;
+                    statusColor = '#ff6d00';
+                    statusBg = 'rgba(255, 109, 0, 0.15)';
+                } else if (booking.status === 'archived') {
+                    statusText = 'Выполнено';
+                    statusColor = '#00c853';
+                    statusBg = 'rgba(0, 200, 83, 0.15)';
+                }
+                
                 const dateStr = new Date(booking.booking_date).toLocaleDateString('ru-RU', {
                     day: '2-digit', month: '2-digit', year: 'numeric'
                 });
@@ -446,54 +507,37 @@ function loadHistory() {
                     hour: '2-digit', minute: '2-digit'
                 });
                 
-                const createdDate = new Date(booking.created_at).toLocaleString('ru-RU', {
-                    day: '2-digit', month: '2-digit', year: 'numeric',
-                    hour: '2-digit', minute: '2-digit'
-                });
-                
                 return `
                     <div style="
-                        padding: 14px 18px;
+                        padding: 10px 16px;
                         background: #1a1a1a;
                         border-radius: 8px;
-                        margin-bottom: 8px;
-                        border-left: 4px solid ${booking.action_color || '#00c853'};
+                        margin-bottom: 6px;
+                        border-left: 4px solid ${statusColor};
                         display: flex;
                         justify-content: space-between;
                         align-items: center;
-                        flex-wrap: wrap;
-                        gap: 8px;
-                        transition: all 0.3s;
+                        gap: 12px;
+                        flex-wrap: nowrap;
                     ">
-                        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-                            <strong style="color: #e0e0e0; font-size: 15px;">📍 ${booking.place_number}</strong>
-                            <span style="color: #909090; font-size: 13px;">Блок ${booking.block}</span>
-                            <span style="color: #909090; font-size: 13px;">👤 ${booking.employee_id}</span>
-                            <span style="color: #909090; font-size: 13px;">📅 ${dateStr} ${timeStr}</span>
-                            <span style="color: #666; font-size: 11px;">🕐 ${createdDate}</span>
-                        </div>
+                        <span style="color: #e0e0e0; font-size: 14px; white-space: nowrap; font-weight: 500;">${fullText}</span>
+                        <span style="color: #909090; font-size: 13px; white-space: nowrap;">👤 ${booking.employee_id}</span>
+                        <span style="color: #909090; font-size: 13px; white-space: nowrap;">📅 ${dateStr} ${timeStr}</span>
                         <span style="
-                            color: ${booking.action_color || '#00c853'};
-                            background: ${booking.action_bg || 'rgba(0, 200, 83, 0.15)'};
-                            padding: 4px 14px;
-                            border-radius: 20px;
+                            color: ${statusColor};
+                            background: ${statusBg};
+                            padding: 2px 12px;
+                            border-radius: 4px;
                             font-size: 12px;
                             font-weight: 500;
                             white-space: nowrap;
-                        ">${booking.action || 'Создано'}</span>
+                            margin-left: auto;
+                        ">${statusText}</span>
                     </div>
                 `;
             }).join('');
         } catch (error) {
             console.error('Error loading history:', error);
-            const container = document.getElementById('historyBookings');
-            if (container) {
-                container.innerHTML = `
-                    <div style="text-align: center; padding: 40px; color: #ff1744;">
-                        ❌ Ошибка загрузки истории
-                    </div>
-                `;
-            }
         }
         historyTimeout = null;
     }, 500);
