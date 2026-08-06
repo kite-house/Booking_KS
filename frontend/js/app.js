@@ -706,10 +706,37 @@ function showBookingNotification(message, type = 'info') {
 }
 
 async function cancelUserBooking(bookingId, placeNumber) {
-    if (!confirm(`Вы уверены, что хотите отменить бронирование места ${placeNumber}?`)) {
-        return;
-    }
-    
+    // Красивое подтверждение
+    const result = await Swal.fire({
+        title: '❓ Отмена бронирования',
+        html: `
+            <p style="font-size: 16px; color: #e0e0e0;">Вы уверены, что хотите отменить бронирование?</p>
+            <p style="font-size: 18px; font-weight: 600; color: #7b2ffc; margin-top: 8px;">
+                СЦ КРСС КС${placeNumber}
+            </p>
+            <p style="font-size: 14px; color: #909090; margin-top: 4px;">
+                📅 ${selectedDate ? formatDateDisplay(selectedDate).dayName + ', ' + formatDateDisplay(selectedDate).dayNumber + ' ' + formatDateDisplay(selectedDate).month : ''}
+            </p>
+        `,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ff1744',
+        cancelButtonColor: '#2a2a2a',
+        confirmButtonText: '✅ Да, отменить',
+        cancelButtonText: '❌ Нет, оставить',
+        background: '#1a1a1a',
+        color: '#e0e0e0',
+        iconColor: '#ff1744',
+        reverseButtons: true,
+        customClass: {
+            popup: 'swal-dark',
+            confirmButton: 'swal-confirm-btn',
+            cancelButton: 'swal-cancel-btn'
+        }
+    });
+
+    if (!result.isConfirmed) return;
+
     try {
         const userId = auth.getUserId();
         const response = await fetch(`${API_BASE}/bookings/${bookingId}/cancel?user_id=${userId}`, {
@@ -719,23 +746,45 @@ async function cancelUserBooking(bookingId, placeNumber) {
         const data = await response.json();
         
         if (response.ok) {
-            showBookingNotification('✅ Бронирование отменено!', 'success');
-            // Очищаем кеш для текущей даты
+            await Swal.fire({
+                title: '✅ Отменено!',
+                text: `Бронирование СЦ КРСС КС${placeNumber} успешно отменено.`,
+                icon: 'success',
+                confirmButtonColor: '#7b2ffc',
+                background: '#1a1a1a',
+                color: '#e0e0e0',
+                confirmButtonText: 'Отлично',
+                timer: 2000,
+                timerProgressBar: true
+            });
+            
             const dateStr = selectedDate ? formatDateKey(selectedDate) : '';
             const cacheKey = `${userId}_${dateStr}`;
             delete placesCache[cacheKey];
-            // Мгновенно обновляем отображение
             loadPlaces();
-            // Также обновляем историю если она открыта
             if (typeof loadHistory === 'function') {
                 loadHistory();
             }
         } else {
-            showBookingNotification('❌ ' + (data.detail || 'Ошибка отмены'), 'error');
+            await Swal.fire({
+                title: '❌ Ошибка',
+                text: data.detail || 'Не удалось отменить бронирование',
+                icon: 'error',
+                confirmButtonColor: '#7b2ffc',
+                background: '#1a1a1a',
+                color: '#e0e0e0'
+            });
         }
     } catch (error) {
         console.error('Error canceling booking:', error);
-        showBookingNotification('❌ Ошибка соединения с сервером', 'error');
+        await Swal.fire({
+            title: '❌ Ошибка',
+            text: 'Ошибка соединения с сервером',
+            icon: 'error',
+            confirmButtonColor: '#7b2ffc',
+            background: '#1a1a1a',
+            color: '#e0e0e0'
+        });
     }
 }
 

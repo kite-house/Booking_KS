@@ -237,39 +237,102 @@ function adminUpdateStats(places) {
 
 function adminCancelBooking(bookingId, placeNumber) {
     if (!bookingId) {
-        alert('Ошибка: ID бронирования не найден');
+        Swal.fire({
+            title: '❌ Ошибка',
+            text: 'ID бронирования не найден',
+            icon: 'error',
+            confirmButtonColor: '#7b2ffc',
+            background: '#1a1a1a',
+            color: '#e0e0e0'
+        });
         return;
     }
     
     const adminId = auth.getUserId();
     if (!adminId) {
-        alert('Ошибка: не удалось определить администратора');
+        Swal.fire({
+            title: '❌ Ошибка',
+            text: 'Не удалось определить администратора',
+            icon: 'error',
+            confirmButtonColor: '#7b2ffc',
+            background: '#1a1a1a',
+            color: '#e0e0e0'
+        });
         return;
     }
     
-    if (!confirm(`Вы уверены, что хотите отменить бронирование места ${placeNumber}?`)) {
-        return;
-    }
-    
-    fetch(`${API_BASE}/admin/cancel-booking/${bookingId}?admin_id=${adminId}`, {
-        method: 'DELETE'
-    })
-    .then(response => {
-        if (response.ok) {
-            alert(`Бронирование места ${placeNumber} отменено!`);
-            // Мгновенно обновляем все представления
-            adminLoadPlaces();
-            loadAdminBookings();
-            loadHistory();
-        } else {
-            response.json().then(data => {
-                alert('Ошибка: ' + (data.detail || 'Неизвестная ошибка'));
+    Swal.fire({
+        title: '🔐 Отмена бронирования',
+        html: `
+            <p style="font-size: 16px; color: #e0e0e0;">Вы уверены, что хотите отменить бронирование?</p>
+            <p style="font-size: 18px; font-weight: 600; color: #ff6d00; margin-top: 8px;">
+                СЦ КРСС КС${placeNumber}
+            </p>
+            <p style="font-size: 14px; color: #909090; margin-top: 4px;">
+                ⚠️ Действие выполняется от имени администратора
+            </p>
+        `,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ff6d00',
+        cancelButtonColor: '#2a2a2a',
+        confirmButtonText: '✅ Да, отменить',
+        cancelButtonText: '❌ Нет, оставить',
+        background: '#1a1a1a',
+        color: '#e0e0e0',
+        iconColor: '#ff6d00',
+        reverseButtons: true,
+        customClass: {
+            popup: 'swal-dark',
+            confirmButton: 'swal-confirm-btn',
+            cancelButton: 'swal-cancel-btn'
+        }
+    }).then(async (result) => {
+        if (!result.isConfirmed) return;
+        
+        try {
+            const response = await fetch(`${API_BASE}/admin/cancel-booking/${bookingId}?admin_id=${adminId}`, {
+                method: 'DELETE'
+            });
+            
+            if (response.ok) {
+                await Swal.fire({
+                    title: '✅ Отменено!',
+                    text: `Бронирование СЦ КРСС КС${placeNumber} успешно отменено администратором.`,
+                    icon: 'success',
+                    confirmButtonColor: '#7b2ffc',
+                    background: '#1a1a1a',
+                    color: '#e0e0e0',
+                    confirmButtonText: 'Отлично',
+                    timer: 2000,
+                    timerProgressBar: true
+                });
+                
+                adminLoadPlaces();
+                loadAdminBookings();
+                loadHistory();
+            } else {
+                const data = await response.json();
+                await Swal.fire({
+                    title: '❌ Ошибка',
+                    text: data.detail || 'Не удалось отменить бронирование',
+                    icon: 'error',
+                    confirmButtonColor: '#7b2ffc',
+                    background: '#1a1a1a',
+                    color: '#e0e0e0'
+                });
+            }
+        } catch (error) {
+            console.error('Error canceling booking:', error);
+            await Swal.fire({
+                title: '❌ Ошибка',
+                text: 'Ошибка соединения с сервером',
+                icon: 'error',
+                confirmButtonColor: '#7b2ffc',
+                background: '#1a1a1a',
+                color: '#e0e0e0'
             });
         }
-    })
-    .catch(error => {
-        console.error('Error canceling booking:', error);
-        alert('Ошибка соединения с сервером');
     });
 }
 
@@ -348,44 +411,152 @@ function loadPendingUsers() {
 }
 
 function grantAccess(userId) {
-    if (!confirm('Выдать доступ этому пользователю?')) return;
-    
-    fetch(`${API_BASE}/admin/grant-access/${userId}`, {
-        method: 'POST'
-    })
-    .then(response => {
-        if (response.ok) {
-            alert('✅ Доступ выдан успешно!');
-            loadPendingUsers();
-        } else {
-            alert('❌ Ошибка выдачи доступа');
-        }
-    })
-    .catch(error => {
-        console.error('Error granting access:', error);
-        alert('❌ Ошибка соединения с сервером');
-    });
+    fetch(`${API_BASE}/admin/pending-users`)
+        .then(response => response.json())
+        .then(users => {
+            const user = users.find(u => u.id === userId);
+            if (!user) return;
+            
+            Swal.fire({
+                title: '👤 Выдача доступа',
+                html: `
+                    <p style="font-size: 16px; color: #e0e0e0;">Выдать доступ пользователю?</p>
+                    <p style="font-size: 18px; font-weight: 600; color: #00c853; margin-top: 8px;">
+                        ID: ${user.employee_id}
+                    </p>
+                    <p style="font-size: 14px; color: #909090; margin-top: 4px;">
+                        🕐 Зарегистрирован: ${new Date(user.created_at).toLocaleString()}
+                    </p>
+                `,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#00c853',
+                cancelButtonColor: '#2a2a2a',
+                confirmButtonText: '✅ Да, выдать',
+                cancelButtonText: '❌ Отмена',
+                background: '#1a1a1a',
+                color: '#e0e0e0',
+                iconColor: '#00c853',
+                reverseButtons: true
+            }).then(async (result) => {
+                if (!result.isConfirmed) return;
+                
+                try {
+                    const response = await fetch(`${API_BASE}/admin/grant-access/${userId}`, {
+                        method: 'POST'
+                    });
+                    
+                    if (response.ok) {
+                        await Swal.fire({
+                            title: '✅ Доступ выдан!',
+                            text: `Пользователь ${user.employee_id} получил доступ.`,
+                            icon: 'success',
+                            confirmButtonColor: '#7b2ffc',
+                            background: '#1a1a1a',
+                            color: '#e0e0e0',
+                            timer: 1500,
+                            timerProgressBar: true
+                        });
+                        loadPendingUsers();
+                    } else {
+                        await Swal.fire({
+                            title: '❌ Ошибка',
+                            text: 'Не удалось выдать доступ',
+                            icon: 'error',
+                            confirmButtonColor: '#7b2ffc',
+                            background: '#1a1a1a',
+                            color: '#e0e0e0'
+                        });
+                    }
+                } catch (error) {
+                    console.error('Error granting access:', error);
+                    await Swal.fire({
+                        title: '❌ Ошибка',
+                        text: 'Ошибка соединения с сервером',
+                        icon: 'error',
+                        confirmButtonColor: '#7b2ffc',
+                        background: '#1a1a1a',
+                        color: '#e0e0e0'
+                    });
+                }
+            });
+        })
+        .catch(error => {
+            console.error('Error fetching user:', error);
+            Swal.fire({
+                title: '❌ Ошибка',
+                text: 'Не удалось загрузить данные пользователя',
+                icon: 'error',
+                confirmButtonColor: '#7b2ffc',
+                background: '#1a1a1a',
+                color: '#e0e0e0'
+            });
+        });
 }
 
 function deleteUser(userId, employeeId) {
-    if (!confirm(`❓ Вы уверены, что хотите удалить пользователя ${employeeId}?\nВсе его данные будут безвозвратно удалены!`)) {
-        return;
-    }
-    
-    fetch(`${API_BASE}/admin/delete-user/${userId}`, {
-        method: 'DELETE'
-    })
-    .then(response => {
-        if (response.ok) {
-            alert(`✅ Пользователь ${employeeId} удален!`);
-            loadPendingUsers();
-        } else {
-            alert('❌ Ошибка удаления пользователя');
+    Swal.fire({
+        title: '⚠️ Удаление пользователя',
+        html: `
+            <p style="font-size: 16px; color: #e0e0e0;">Вы уверены, что хотите удалить пользователя?</p>
+            <p style="font-size: 18px; font-weight: 600; color: #ff1744; margin-top: 8px;">
+                ID: ${employeeId}
+            </p>
+            <p style="font-size: 14px; color: #ff1744; margin-top: 4px;">
+                ⚠️ Все данные пользователя будут безвозвратно удалены!
+            </p>
+        `,
+        icon: 'error',
+        showCancelButton: true,
+        confirmButtonColor: '#ff1744',
+        cancelButtonColor: '#2a2a2a',
+        confirmButtonText: '🗑️ Да, удалить',
+        cancelButtonText: '❌ Отмена',
+        background: '#1a1a1a',
+        color: '#e0e0e0',
+        iconColor: '#ff1744',
+        reverseButtons: true
+    }).then(async (result) => {
+        if (!result.isConfirmed) return;
+        
+        try {
+            const response = await fetch(`${API_BASE}/admin/delete-user/${userId}`, {
+                method: 'DELETE'
+            });
+            
+            if (response.ok) {
+                await Swal.fire({
+                    title: '✅ Удалено!',
+                    text: `Пользователь ${employeeId} удален.`,
+                    icon: 'success',
+                    confirmButtonColor: '#7b2ffc',
+                    background: '#1a1a1a',
+                    color: '#e0e0e0',
+                    timer: 1500,
+                    timerProgressBar: true
+                });
+                loadPendingUsers();
+            } else {
+                await Swal.fire({
+                    title: '❌ Ошибка',
+                    text: 'Не удалось удалить пользователя',
+                    icon: 'error',
+                    confirmButtonColor: '#7b2ffc',
+                    background: '#1a1a1a',
+                    color: '#e0e0e0'
+                });
+            }
+        } catch (error) {
+            console.error('Error deleting user:', error);
+            await Swal.fire({
+                title: '❌ Ошибка',
+                text: 'Ошибка соединения с сервером',
+                icon: 'error',
+                confirmButtonColor: '#7b2ffc',
+                background: '#1a1a1a',
+                color: '#e0e0e0'
+            });
         }
-    })
-    .catch(error => {
-        console.error('Error deleting user:', error);
-        alert('❌ Ошибка соединения с сервером');
     });
 }
 
