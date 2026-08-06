@@ -257,6 +257,7 @@ function adminCancelBooking(bookingId, placeNumber) {
     .then(response => {
         if (response.ok) {
             alert(`Бронирование места ${placeNumber} отменено!`);
+            // Мгновенно обновляем все представления
             adminLoadPlaces();
             loadAdminBookings();
             loadHistory();

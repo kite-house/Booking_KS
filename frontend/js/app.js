@@ -464,12 +464,7 @@ function loadPlaces() {
             const dateStr = selectedDate ? formatDateKey(selectedDate) : '';
             const cacheKey = `${userId}_${dateStr}`;
             
-            if (placesCache[cacheKey]) {
-                renderPlaces(placesCache[cacheKey]);
-                loadPlacesTimeout = null;
-                return;
-            }
-            
+            // Всегда запрашиваем свежие данные с сервера
             let url = `${API_BASE}/places/status?user_id=${userId}`;
             if (dateStr) {
                 url += `&date=${dateStr}`;
@@ -482,6 +477,7 @@ function loadPlaces() {
             const data = await response.json();
             
             if (data && data.places) {
+                // Обновляем кеш
                 placesCache[cacheKey] = data.places;
                 renderPlaces(data.places);
             }
@@ -724,7 +720,16 @@ async function cancelUserBooking(bookingId, placeNumber) {
         
         if (response.ok) {
             showBookingNotification('✅ Бронирование отменено!', 'success');
+            // Очищаем кеш для текущей даты
+            const dateStr = selectedDate ? formatDateKey(selectedDate) : '';
+            const cacheKey = `${userId}_${dateStr}`;
+            delete placesCache[cacheKey];
+            // Мгновенно обновляем отображение
             loadPlaces();
+            // Также обновляем историю если она открыта
+            if (typeof loadHistory === 'function') {
+                loadHistory();
+            }
         } else {
             showBookingNotification('❌ ' + (data.detail || 'Ошибка отмены'), 'error');
         }
