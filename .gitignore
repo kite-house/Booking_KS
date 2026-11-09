@@ -2,3 +2,4 @@ venv
 tasks.txt
 .env
 .vscode
+__pycache__

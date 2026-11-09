@@ -59,25 +59,23 @@ async def delete_user(
     return {"message": "Пользователь удален"}
 
 @router.delete("/cancel-booking/{booking_id}")
-async def cancel_booking(
+async def cancel_booking_by_admin(
     booking_id: int,
+    admin_id: int,
     db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(
-        select(Booking).where(Booking.id == booking_id)
-    )
-    booking = result.scalar_one_or_none()
-    if not booking:
-        raise HTTPException(status_code=404, detail="Бронирование не найдено")
+    booking_service = BookingService(db)
+    result = await booking_service.cancel_booking_by_admin(booking_id, admin_id)
     
-    await db.delete(booking)
-    await db.commit()
-    return {"message": "Бронирование отменено"}
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+    
+    return {"message": result["message"]}
 
 @router.get("/all-bookings")
 async def get_all_bookings(
     db: AsyncSession = Depends(get_db)
 ):
     booking_service = BookingService(db)
-    bookings = await booking_service.get_all_bookings()
+    bookings = await booking_service.get_all_bookings_with_history()
     return bookings

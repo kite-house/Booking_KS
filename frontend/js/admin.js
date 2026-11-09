@@ -135,8 +135,54 @@ function adminRenderPlaces(places) {
         let statusClass = place.is_booked ? 'booked' : 'free';
         div.classList.add(statusClass);
         
+        // Вычисляем блок и цифру
+        const placeNumber = place.place_number;
+        let blockNumber, digitNumber, isExtra = false;
+        
+        if (placeNumber >= 1 && placeNumber <= 18) {
+            blockNumber = 1;
+            digitNumber = Math.ceil(placeNumber / 2);
+        } else if (placeNumber >= 19 && placeNumber <= 20) {
+            blockNumber = 1;
+            isExtra = true;
+            digitNumber = null;
+        } else if (placeNumber >= 21 && placeNumber <= 38) {
+            blockNumber = 2;
+            const localNum = placeNumber - 20;
+            digitNumber = Math.ceil(localNum / 2);
+        } else if (placeNumber >= 39 && placeNumber <= 40) {
+            blockNumber = 2;
+            isExtra = true;
+            digitNumber = null;
+        } else if (placeNumber >= 41 && placeNumber <= 58) {
+            blockNumber = 3;
+            const localNum = placeNumber - 40;
+            digitNumber = Math.ceil(localNum / 2);
+        } else if (placeNumber >= 59 && placeNumber <= 60) {
+            blockNumber = 3;
+            isExtra = true;
+            digitNumber = null;
+        }
+        
+        // Формируем текст
+        const blockText = `Б${blockNumber}`;
+        const ksText = `КС${placeNumber}`;
+        
+        let bottomText = '';
+        if (isExtra) {
+            bottomText = `${blockText} ДОП`;
+        } else {
+            bottomText = `${blockText} Ц${digitNumber}`;
+        }
+        
+        div.innerHTML = `
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; padding: 4px;">
+                <span style="font-size: 11px; font-weight: 600; opacity: 0.9; text-align: center; line-height: 1.2;">СЦ КРСС ${ksText}</span>
+                <span style="font-size: 10px; font-weight: 400; opacity: 0.8; margin-top: 2px;">${bottomText}</span>
+            </div>
+        `;
+        
         if (place.is_booked) {
-            // Показываем Employee ID
             const info = document.createElement('div');
             info.style.cssText = `
                 position: absolute;
@@ -147,30 +193,25 @@ function adminRenderPlaces(places) {
                 border-radius: 4px;
                 white-space: nowrap;
                 cursor: pointer;
+                right: 2px;
             `;
-            // Используем booking_id из данных
             const employeeId = place.booked_employee_id || place.booked_by || '?';
             info.textContent = `👤 ${employeeId}`;
             info.title = 'Нажмите для отмены брони';
             
-            // Если есть booking_id, добавляем обработчик
             if (place.booking_id) {
                 info.onclick = (e) => {
                     e.stopPropagation();
                     adminCancelBooking(place.booking_id, place.place_number);
                 };
                 div.style.cursor = 'pointer';
+                div.title = 'Нажмите для отмены брони';
                 div.onclick = () => {
                     adminCancelBooking(place.booking_id, place.place_number);
                 };
             }
             div.appendChild(info);
         }
-        
-        div.innerHTML += `
-            <span>${place.place_number}</span>
-            <span class="block-label">${place.block}</span>
-        `;
         
         grid.appendChild(div);
     });
@@ -196,29 +237,102 @@ function adminUpdateStats(places) {
 
 function adminCancelBooking(bookingId, placeNumber) {
     if (!bookingId) {
-        alert('❌ Ошибка: ID бронирования не найден');
+        Swal.fire({
+            title: '❌ Ошибка',
+            text: 'ID бронирования не найден',
+            icon: 'error',
+            confirmButtonColor: '#7b2ffc',
+            background: '#1a1a1a',
+            color: '#e0e0e0'
+        });
         return;
     }
     
-    if (!confirm(`❓ Вы уверены, что хотите отменить бронирование места ${placeNumber}?`)) {
+    const adminId = auth.getUserId();
+    if (!adminId) {
+        Swal.fire({
+            title: '❌ Ошибка',
+            text: 'Не удалось определить администратора',
+            icon: 'error',
+            confirmButtonColor: '#7b2ffc',
+            background: '#1a1a1a',
+            color: '#e0e0e0'
+        });
         return;
     }
     
-    fetch(`${API_BASE}/admin/cancel-booking/${bookingId}`, {
-        method: 'DELETE'
-    })
-    .then(response => {
-        if (response.ok) {
-            alert(`✅ Бронирование места ${placeNumber} отменено!`);
-            adminLoadPlaces(); // Обновляем список
-            loadAdminBookings(); // Обновляем историю
-        } else {
-            alert('❌ Ошибка отмены бронирования');
+    Swal.fire({
+        title: '🔐 Отмена бронирования',
+        html: `
+            <p style="font-size: 16px; color: #e0e0e0;">Вы уверены, что хотите отменить бронирование?</p>
+            <p style="font-size: 18px; font-weight: 600; color: #ff6d00; margin-top: 8px;">
+                СЦ КРСС КС${placeNumber}
+            </p>
+            <p style="font-size: 14px; color: #909090; margin-top: 4px;">
+                ⚠️ Действие выполняется от имени администратора
+            </p>
+        `,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ff6d00',
+        cancelButtonColor: '#2a2a2a',
+        confirmButtonText: '✅ Да, отменить',
+        cancelButtonText: '❌ Нет, оставить',
+        background: '#1a1a1a',
+        color: '#e0e0e0',
+        iconColor: '#ff6d00',
+        reverseButtons: true,
+        customClass: {
+            popup: 'swal-dark',
+            confirmButton: 'swal-confirm-btn',
+            cancelButton: 'swal-cancel-btn'
         }
-    })
-    .catch(error => {
-        console.error('Error canceling booking:', error);
-        alert('❌ Ошибка соединения с сервером');
+    }).then(async (result) => {
+        if (!result.isConfirmed) return;
+        
+        try {
+            const response = await fetch(`${API_BASE}/admin/cancel-booking/${bookingId}?admin_id=${adminId}`, {
+                method: 'DELETE'
+            });
+            
+            if (response.ok) {
+                await Swal.fire({
+                    title: '✅ Отменено!',
+                    text: `Бронирование СЦ КРСС КС${placeNumber} успешно отменено администратором.`,
+                    icon: 'success',
+                    confirmButtonColor: '#7b2ffc',
+                    background: '#1a1a1a',
+                    color: '#e0e0e0',
+                    confirmButtonText: 'Отлично',
+                    timer: 2000,
+                    timerProgressBar: true
+                });
+                
+                adminLoadPlaces();
+                loadAdminBookings();
+                loadHistory();
+            } else {
+                const data = await response.json();
+                await Swal.fire({
+                    title: '❌ Ошибка',
+                    text: data.detail || 'Не удалось отменить бронирование',
+                    icon: 'error',
+                    confirmButtonColor: '#7b2ffc',
+                    background: '#1a1a1a',
+                    color: '#e0e0e0'
+                });
+            }
+        } catch (error) {
+            console.error('Error canceling booking:', error);
+            await Swal.fire({
+                title: '❌ Ошибка',
+                text: 'Ошибка соединения с сервером',
+                icon: 'error',
+                confirmButtonColor: '#7b2ffc',
+                background: '#1a1a1a',
+                color: '#e0e0e0'
+            });
+        }
     });
 }
 
@@ -297,44 +411,152 @@ function loadPendingUsers() {
 }
 
 function grantAccess(userId) {
-    if (!confirm('Выдать доступ этому пользователю?')) return;
-    
-    fetch(`${API_BASE}/admin/grant-access/${userId}`, {
-        method: 'POST'
-    })
-    .then(response => {
-        if (response.ok) {
-            alert('✅ Доступ выдан успешно!');
-            loadPendingUsers();
-        } else {
-            alert('❌ Ошибка выдачи доступа');
-        }
-    })
-    .catch(error => {
-        console.error('Error granting access:', error);
-        alert('❌ Ошибка соединения с сервером');
-    });
+    fetch(`${API_BASE}/admin/pending-users`)
+        .then(response => response.json())
+        .then(users => {
+            const user = users.find(u => u.id === userId);
+            if (!user) return;
+            
+            Swal.fire({
+                title: '👤 Выдача доступа',
+                html: `
+                    <p style="font-size: 16px; color: #e0e0e0;">Выдать доступ пользователю?</p>
+                    <p style="font-size: 18px; font-weight: 600; color: #00c853; margin-top: 8px;">
+                        ID: ${user.employee_id}
+                    </p>
+                    <p style="font-size: 14px; color: #909090; margin-top: 4px;">
+                        🕐 Зарегистрирован: ${new Date(user.created_at).toLocaleString()}
+                    </p>
+                `,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#00c853',
+                cancelButtonColor: '#2a2a2a',
+                confirmButtonText: '✅ Да, выдать',
+                cancelButtonText: '❌ Отмена',
+                background: '#1a1a1a',
+                color: '#e0e0e0',
+                iconColor: '#00c853',
+                reverseButtons: true
+            }).then(async (result) => {
+                if (!result.isConfirmed) return;
+                
+                try {
+                    const response = await fetch(`${API_BASE}/admin/grant-access/${userId}`, {
+                        method: 'POST'
+                    });
+                    
+                    if (response.ok) {
+                        await Swal.fire({
+                            title: '✅ Доступ выдан!',
+                            text: `Пользователь ${user.employee_id} получил доступ.`,
+                            icon: 'success',
+                            confirmButtonColor: '#7b2ffc',
+                            background: '#1a1a1a',
+                            color: '#e0e0e0',
+                            timer: 1500,
+                            timerProgressBar: true
+                        });
+                        loadPendingUsers();
+                    } else {
+                        await Swal.fire({
+                            title: '❌ Ошибка',
+                            text: 'Не удалось выдать доступ',
+                            icon: 'error',
+                            confirmButtonColor: '#7b2ffc',
+                            background: '#1a1a1a',
+                            color: '#e0e0e0'
+                        });
+                    }
+                } catch (error) {
+                    console.error('Error granting access:', error);
+                    await Swal.fire({
+                        title: '❌ Ошибка',
+                        text: 'Ошибка соединения с сервером',
+                        icon: 'error',
+                        confirmButtonColor: '#7b2ffc',
+                        background: '#1a1a1a',
+                        color: '#e0e0e0'
+                    });
+                }
+            });
+        })
+        .catch(error => {
+            console.error('Error fetching user:', error);
+            Swal.fire({
+                title: '❌ Ошибка',
+                text: 'Не удалось загрузить данные пользователя',
+                icon: 'error',
+                confirmButtonColor: '#7b2ffc',
+                background: '#1a1a1a',
+                color: '#e0e0e0'
+            });
+        });
 }
 
 function deleteUser(userId, employeeId) {
-    if (!confirm(`❓ Вы уверены, что хотите удалить пользователя ${employeeId}?\nВсе его данные будут безвозвратно удалены!`)) {
-        return;
-    }
-    
-    fetch(`${API_BASE}/admin/delete-user/${userId}`, {
-        method: 'DELETE'
-    })
-    .then(response => {
-        if (response.ok) {
-            alert(`✅ Пользователь ${employeeId} удален!`);
-            loadPendingUsers();
-        } else {
-            alert('❌ Ошибка удаления пользователя');
+    Swal.fire({
+        title: '⚠️ Удаление пользователя',
+        html: `
+            <p style="font-size: 16px; color: #e0e0e0;">Вы уверены, что хотите удалить пользователя?</p>
+            <p style="font-size: 18px; font-weight: 600; color: #ff1744; margin-top: 8px;">
+                ID: ${employeeId}
+            </p>
+            <p style="font-size: 14px; color: #ff1744; margin-top: 4px;">
+                ⚠️ Все данные пользователя будут безвозвратно удалены!
+            </p>
+        `,
+        icon: 'error',
+        showCancelButton: true,
+        confirmButtonColor: '#ff1744',
+        cancelButtonColor: '#2a2a2a',
+        confirmButtonText: '🗑️ Да, удалить',
+        cancelButtonText: '❌ Отмена',
+        background: '#1a1a1a',
+        color: '#e0e0e0',
+        iconColor: '#ff1744',
+        reverseButtons: true
+    }).then(async (result) => {
+        if (!result.isConfirmed) return;
+        
+        try {
+            const response = await fetch(`${API_BASE}/admin/delete-user/${userId}`, {
+                method: 'DELETE'
+            });
+            
+            if (response.ok) {
+                await Swal.fire({
+                    title: '✅ Удалено!',
+                    text: `Пользователь ${employeeId} удален.`,
+                    icon: 'success',
+                    confirmButtonColor: '#7b2ffc',
+                    background: '#1a1a1a',
+                    color: '#e0e0e0',
+                    timer: 1500,
+                    timerProgressBar: true
+                });
+                loadPendingUsers();
+            } else {
+                await Swal.fire({
+                    title: '❌ Ошибка',
+                    text: 'Не удалось удалить пользователя',
+                    icon: 'error',
+                    confirmButtonColor: '#7b2ffc',
+                    background: '#1a1a1a',
+                    color: '#e0e0e0'
+                });
+            }
+        } catch (error) {
+            console.error('Error deleting user:', error);
+            await Swal.fire({
+                title: '❌ Ошибка',
+                text: 'Ошибка соединения с сервером',
+                icon: 'error',
+                confirmButtonColor: '#7b2ffc',
+                background: '#1a1a1a',
+                color: '#e0e0e0'
+            });
         }
-    })
-    .catch(error => {
-        console.error('Error deleting user:', error);
-        alert('❌ Ошибка соединения с сервером');
     });
 }
 
@@ -363,39 +585,39 @@ function loadAdminBookings() {
                 return;
             }
             
-            container.innerHTML = bookings.map(booking => `
-                <div style="
-                    padding: 16px 20px;
-                    background: #1a1a1a;
-                    border-radius: 8px;
-                    margin-bottom: 8px;
-                    border-left: 4px solid #7b2ffc;
-                ">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <strong>📍 Место ${booking.place_number}</strong>
-                            <span style="margin-left: 12px; color: #909090;">
-                                Блок ${booking.block}
-                            </span>
-                            <span style="margin-left: 12px; color: #909090;">
-                                👤 Пользователь: <strong>${booking.employee_id || booking.user_id}</strong>
-                            </span>
-                            <span style="margin-left: 12px; color: #909090;">
-                                📅 ${new Date(booking.booking_date).toLocaleString()}
-                            </span>
-                        </div>
+            container.innerHTML = bookings.map(booking => {
+                const fullText = `СЦ КРСС КС${booking.place_number}`;
+                
+                return `
+                    <div style="
+                        padding: 10px 16px;
+                        background: #1a1a1a;
+                        border-radius: 8px;
+                        margin-bottom: 6px;
+                        border-left: 4px solid #7b2ffc;
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        gap: 12px;
+                        flex-wrap: nowrap;
+                    ">
+                        <span style="color: #e0e0e0; font-size: 14px; white-space: nowrap; font-weight: 500;">${fullText}</span>
+                        <span style="color: #909090; font-size: 13px; white-space: nowrap;">👤 ${booking.employee_id || booking.user_id}</span>
+                        <span style="color: #909090; font-size: 13px; white-space: nowrap;">📅 ${new Date(booking.booking_date).toLocaleDateString()}</span>
                         <button onclick="adminCancelBooking(${booking.id}, ${booking.place_number})" style="
-                            padding: 6px 16px;
+                            padding: 4px 14px;
                             background: #ff1744;
                             color: white;
                             border: none;
-                            border-radius: 6px;
+                            border-radius: 4px;
                             cursor: pointer;
+                            font-size: 12px;
                             font-weight: 500;
-                        ">❌ Отменить</button>
+                            white-space: nowrap;
+                        ">Отменить</button>
                     </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         } catch (error) {
             console.error('Error loading bookings:', error);
         }
@@ -422,39 +644,70 @@ function loadHistory() {
             if (bookings.length === 0) {
                 container.innerHTML = `
                     <div style="text-align: center; padding: 40px; color: #909090;">
-                        <p style="font-size: 18px;">📜 История пуста</p>
+                        <p style="font-size: 18px;">История пуста</p>
                     </div>
                 `;
                 return;
             }
             
-            container.innerHTML = bookings.map(booking => `
-                <div style="
-                    padding: 16px 20px;
-                    background: #1a1a1a;
-                    border-radius: 8px;
-                    margin-bottom: 8px;
-                    border-left: 4px solid #00c853;
-                ">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <strong>📍 Место ${booking.place_number}</strong>
-                            <span style="margin-left: 12px; color: #909090;">
-                                Блок ${booking.block}
-                            </span>
-                            <span style="margin-left: 12px; color: #909090;">
-                                👤 Пользователь: <strong>${booking.employee_id || booking.user_id}</strong>
-                            </span>
-                            <span style="margin-left: 12px; color: #909090;">
-                                📅 ${new Date(booking.booking_date).toLocaleString()}
-                            </span>
-                            <span style="margin-left: 12px; color: #7b2ffc; font-size: 12px;">
-                                🕐 Создано: ${new Date(booking.created_at).toLocaleString()}
-                            </span>
-                        </div>
+            container.innerHTML = bookings.map(booking => {
+                const fullText = `СЦ КРСС КС${booking.place_number}`;
+                
+                let statusText = 'Создано';
+                let statusColor = '#78909c';
+                let statusBg = 'rgba(120, 144, 156, 0.15)';
+                
+                if (booking.status === 'cancelled_by_user') {
+                    statusText = 'Отменено пользователем';
+                    statusColor = '#ff1744';
+                    statusBg = 'rgba(255, 23, 68, 0.15)';
+                } else if (booking.status === 'cancelled_by_admin') {
+                    const canceller = booking.canceller_employee_id || booking.cancelled_by;
+                    statusText = `Отменено админом (${canceller})`;
+                    statusColor = '#ff6d00';
+                    statusBg = 'rgba(255, 109, 0, 0.15)';
+                } else if (booking.status === 'archived') {
+                    statusText = 'Выполнено';
+                    statusColor = '#00c853';
+                    statusBg = 'rgba(0, 200, 83, 0.15)';
+                }
+                
+                const dateStr = new Date(booking.booking_date).toLocaleDateString('ru-RU', {
+                    day: '2-digit', month: '2-digit', year: 'numeric'
+                });
+                const timeStr = new Date(booking.booking_date).toLocaleTimeString('ru-RU', {
+                    hour: '2-digit', minute: '2-digit'
+                });
+                
+                return `
+                    <div style="
+                        padding: 10px 16px;
+                        background: #1a1a1a;
+                        border-radius: 8px;
+                        margin-bottom: 6px;
+                        border-left: 4px solid ${statusColor};
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        gap: 12px;
+                        flex-wrap: nowrap;
+                    ">
+                        <span style="color: #e0e0e0; font-size: 14px; white-space: nowrap; font-weight: 500;">${fullText}</span>
+                        <span style="color: #909090; font-size: 13px; white-space: nowrap;">👤 ${booking.employee_id}</span>
+                        <span style="color: #909090; font-size: 13px; white-space: nowrap;">📅 ${dateStr} ${timeStr}</span>
+                        <span style="
+                            color: ${statusColor};
+                            background: ${statusBg};
+                            padding: 2px 12px;
+                            border-radius: 4px;
+                            font-size: 12px;
+                            font-weight: 500;
+                            white-space: nowrap;
+                            margin-left: auto;
+                        ">${statusText}</span>
                     </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         } catch (error) {
             console.error('Error loading history:', error);
         }

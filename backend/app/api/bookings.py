@@ -26,6 +26,20 @@ async def create_booking(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+@router.delete("/{booking_id}/cancel")
+async def cancel_booking_by_user(
+    booking_id: int,
+    user_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    booking_service = BookingService(db)
+    result = await booking_service.cancel_booking_by_user(booking_id, user_id)
+    
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+    
+    return {"message": result["message"]}
+
 @router.get("/user/{user_id}")
 async def get_user_bookings(
     user_id: int,
@@ -35,14 +49,11 @@ async def get_user_bookings(
     bookings = await booking_service.get_user_bookings(user_id)
     return [BookingResponse.model_validate(b) for b in bookings]
 
-@router.delete("/{booking_id}")
-async def cancel_booking(
-    booking_id: int,
+@router.get("/user/{user_id}/active")
+async def get_user_active_bookings(
     user_id: int,
     db: AsyncSession = Depends(get_db)
 ):
     booking_service = BookingService(db)
-    success = await booking_service.cancel_booking(booking_id, user_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="Бронирование не найдено")
-    return {"message": "Бронирование отменено"}
+    bookings = await booking_service.get_user_active_bookings(user_id)
+    return [BookingResponse.model_validate(b) for b in bookings]
